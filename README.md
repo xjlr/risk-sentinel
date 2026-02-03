@@ -101,20 +101,26 @@ This starts:
 - a PostgreSQL database (for state and configuration)
 
 ```bash
-docker-compose up --build
+docker compose up --build
+```
+or
+```bash
+docker compose build --no-cache
+
+docker compose up
 ```
 
 ### Stop services
 
 ```bash
-docker-compose down
+docker compose down
 ```
 
 ### Stop and remove volumes
 Warning: this deletes database data
 
 ```bash
-docker-compose down -v
+docker compose down -v
 ```
 
 > Note: The recommended way to build and run Risk Sentinel is via Docker.
