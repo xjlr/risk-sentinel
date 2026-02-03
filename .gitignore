@@ -1,1 +1,7 @@
 build/
+.cache/
+.env
+*.key
+*.pem
+.DS_Store
+.vscode/
