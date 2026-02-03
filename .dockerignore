@@ -1,0 +1,15 @@
+# Build artifacts
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+Testing/
+CTestTestfile.cmake
+compile_commands.json
+
+# VCS / editor
+.git/
+.vscode/
+
+# OS junk
+.DS_Store
