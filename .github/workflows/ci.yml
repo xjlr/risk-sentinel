@@ -7,6 +7,7 @@ on:
 jobs:
   build-test:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -14,16 +15,35 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build g++ curl
+          sudo apt-get install -y \
+            ccache \
+            cmake ninja-build g++ pkg-config \
+            libpq-dev libpqxx-dev \
+            libcurl4-openssl-dev
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ${{ runner.os }}-ccache-${{ github.ref }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-
 
       - name: Configure
         run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DENABLE_TESTS=ON
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_TESTS=ON
+        env:
+          CMAKE_CXX_COMPILER_LAUNCHER: ccache
 
       - name: Build
         run: |
-          cmake --build build
+          cmake --build build -j2
 
       - name: Test
         run: |
           ctest --test-dir build --output-on-failure
+
+      - name: ccache stats
+        run: ccache -s
