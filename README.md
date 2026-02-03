@@ -52,6 +52,24 @@ Current state:
 
 - Docker Compose (v2)
 
+## Dependencies
+
+### Build-time
+- C++20 compatible compiler (g++ ≥ 11 or clang ≥ 14)
+- CMake ≥ 3.20
+- Ninja (recommended)
+- libpqxx (PostgreSQL C++ client library)
+- libpq (PostgreSQL client library)
+
+### Runtime
+- PostgreSQL ≥ 14
+- libpqxx runtime library
+- libpq runtime library
+
+### Bundled / vendored
+- nlohmann/json (via CPM)
+- Catch2 (via CPM, tests only)
+
 ## Building locally (without Docker)
 
 ```bash
@@ -98,6 +116,9 @@ Warning: this deletes database data
 ```bash
 docker-compose down -v
 ```
+
+> Note: The recommended way to build and run Risk Sentinel is via Docker.
+> Native builds are primarily intended for development and CI environments.
 
 ## Docker services overview
 
