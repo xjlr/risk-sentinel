@@ -1,0 +1,15 @@
+#pragma once
+#include "sentinel/chains/ChainAdapter.hpp"
+#include "sentinel/rpc/JsonRpcClient.hpp"
+
+class ArbitrumAdapter : public ChainAdapter {
+public:
+    explicit ArbitrumAdapter(JsonRpcClient& rpc);
+
+    std::string name() const override { return "arbitrum"; }
+    uint64_t chainId() override;
+    uint64_t latestBlock() override;
+
+private:
+    JsonRpcClient& rpc_;
+};

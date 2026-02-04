@@ -14,6 +14,10 @@
 #include "sentinel/model.hpp"
 #include "sentinel/version.hpp"
 
+#include "sentinel/rpc/JsonRpcClient.hpp"
+#include "sentinel/chains/arbitrum/ArbitrumAdapter.hpp"
+
+
 static std::string getenv_or(const char* k, const char* defv) {
   if (const char* v = std::getenv(k)) return std::string(v);
   return std::string(defv);
@@ -82,12 +86,54 @@ int main(int argc, char** argv) {
     f << "ready" << std::endl;
   }
   std::cout << "[READY] sentinel is ready" << std::endl;
+// ###### POLLing
 
-  // For now keep running (service behavior)
-  while (true) {
-    // TODO: Day 3+: block polling / adapter loop
-    std::this_thread::sleep_for(std::chrono::seconds(60));
+const std::string rpc_url = getenv_or("ARBITRUM_RPC_URL", "");
+if (rpc_url.empty()) {
+  std::cerr << "[FATAL] ARBITRUM_RPC_URL is empty" << std::endl;
+  return 6;
+}
+
+JsonRpcClient rpc(rpc_url);
+ArbitrumAdapter arbitrum(rpc);
+
+// Sanity check
+try {
+  std::uint64_t cid = arbitrum.chainId();
+  std::cout << "[RPC] eth_chainId=" << cid << std::endl;
+} catch (const std::exception& e) {
+  std::cerr << "[FATAL] eth_chainId failed: " << e.what() << std::endl;
+  return 7;
+}
+
+// last = már be van töltve get_or_init_checkpoint()-ből
+std::uint64_t lastProcessed = last;
+
+std::cout << "[POLL] starting block polling from " << lastProcessed << std::endl;
+
+// --- Replace the old while(true) ---
+while (true) {
+  try {
+    const std::uint64_t latest = arbitrum.latestBlock();
+
+    std::cout << "[POLL] latest_block=" << latest
+              << " last_processed=" << lastProcessed << std::endl;
+
+    if (latest > lastProcessed) {
+      for (std::uint64_t b = lastProcessed + 1; b <= latest; ++b) {
+        // Day 3: no block/log fetch yet, only checkpoint advance
+        store.upsert_checkpoint(chain, b);
+        lastProcessed = b;
+
+        std::cout << "[POLL] checkpoint advanced -> " << b << std::endl;
+      }
+    }
+  } catch (const std::exception& e) {
+    std::cerr << "[WARN] polling iteration failed: " << e.what() << std::endl;
   }
+
+  std::this_thread::sleep_for(std::chrono::seconds(5));
+}
 
   return 0;
 }

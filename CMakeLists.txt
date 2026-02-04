@@ -7,6 +7,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(ENABLE_TESTS "Build unit tests" ON)
 
+find_package(CURL REQUIRED)
+
 # -------------------------
 # Interface lib (headers)
 # -------------------------
@@ -55,13 +57,17 @@ target_compile_options(sentinel_core PRIVATE
 # -------------------------
 # Executable
 # -------------------------
+# src/polling/BlockPoller.cpp
 add_executable(sentinel
   src/main.cpp
+  src/rpc/JsonRpcClient.cpp
+  src/chains/arbitrum/ArbitrumAdapter.cpp
 )
 
 target_link_libraries(sentinel PRIVATE
   sentinel_lib
   sentinel_core
+  CURL::libcurl
 )
 
 # -------------------------
