@@ -3,5 +3,6 @@ build/
 .env
 *.key
 *.pem
+*.swp
 .DS_Store
 .vscode/

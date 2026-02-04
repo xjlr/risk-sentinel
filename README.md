@@ -22,6 +22,9 @@ Detection logic and risk models are evolving as part of an iterative build.
 
 Early development / MVP phase
 
+The repository currently focuses on infrastructure, data ingestion,
+and event normalization. Risk detection logic is being added incrementally.
+
 Current state:
 
 - C++ project scaffold (CMake)
@@ -36,13 +39,17 @@ Current state:
 
 ## Requirements
 
-### Build & development
+### Development
 
 - Linux (Ubuntu 22.04 recommended)
 
 - C++20 compatible compiler (g++ ≥ 11 or clang ≥ 14)
 
 - CMake ≥ 3.20
+
+- Ninja
+
+- Docker + Docker Compose v2
 
 - Git
 
@@ -51,6 +58,31 @@ Current state:
 - Docker
 
 - Docker Compose (v2)
+
+## Environment configuration
+
+The application expects a PostgreSQL connection string via the `DATABASE_URL`
+environment variable.
+
+Create a `.env` file in the project root:
+
+```env
+DATABASE_URL=postgresql://sentinel:sentinel@127.0.0.1:5433/sentinel
+```
+This setup is intended for local development, where PostgreSQL runs in Docker
+and the application runs natively on the host.
+
+## Local development
+
+For local development, PostgreSQL is started via Docker, while the application
+is built and executed natively on the host. This avoids expensive Docker rebuilds
+during active development while keeping the runtime environment consistent.
+
+Start the development environment:
+
+```bash
+./dev.sh
+```
 
 ## Dependencies
 
@@ -70,7 +102,17 @@ Current state:
 - nlohmann/json (via CPM)
 - Catch2 (via CPM, tests only)
 
+## Repository layout (excerpt)
+
+- `docker-compose.dev.yml` – PostgreSQL for local development
+- `dev.sh` – local development helper script
+- `.env` – local environment variables (not committed)
+- `build/` – out-of-tree build artifacts
+
 ## Building locally (without Docker)
+
+This builds the Risk Sentinel binary without starting any Docker services.
+A running PostgreSQL instance is still required at runtime.
 
 ```bash
 mkdir -p build
@@ -123,8 +165,10 @@ Warning: this deletes database data
 docker compose down -v
 ```
 
-> Note: The recommended way to build and run Risk Sentinel is via Docker.
-> Native builds are primarily intended for development and CI environments.
+> Note: Docker is primarily used for integration testing and production-like
+> environments.
+> During daily development, Risk Sentinel is typically built and run natively
+> on the host, while PostgreSQL runs in Docker to keep iteration times short.
 
 ## Docker services overview
 
