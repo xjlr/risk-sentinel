@@ -18,6 +18,84 @@ alerts are triggered only when an event is actually relevant to a given protocol
 This repository currently contains the MVP infrastructure and core scaffolding.
 Detection logic and risk models are evolving as part of an iterative build.
 
+## Design decision
+```mermaid
+graph TD
+    %% Style definition
+    classDef external fill:#f9f,stroke:#333,stroke-width:2px,color:#000;
+    classDef fastThread fill:#d4edda,stroke:#28a745,stroke-width:2px,color:#000;
+    classDef slowThread fill:#fff3cd,stroke:#ffc107,stroke-width:2px,color:#000;
+    classDef buffer fill:#e2e3e5,stroke:#333,stroke-dasharray: 5 5,color:#000;
+    classDef db fill:#cce5ff,stroke:#004085,stroke-width:2px,color:#000;
+
+    %% Extrenal resources
+    ArbRPC[Arbitrum RPC / WSS]:::external
+    BaseRPC[Base RPC / WSS]:::external
+
+    %% CHAIN 1 PIPELINE (ARBITRUM)
+    subgraph "Chain 1: Arbitrum Silo (Lock-Free)"
+        Adapter1("Adapter Thread<br/>(WSS Client)"):::fastThread
+        Ring1[("SPSC RingBuffer<br/>(NormalizedEvent)")]:::buffer
+        Engine1("Risk Engine Thread<br/>(In-Memory State)"):::fastThread
+        
+        %% Output Queues
+        Q_DB1[("DB Queue (Events + CheckpointHints) 1<br/>(SPSC)")]:::buffer
+        Q_Alert1[("Alert Queue 1<br/>(SPSC)")]:::buffer
+    end
+
+    %% CHAIN 2 PIPELINE (BASE)
+    subgraph "Chain 2: Base Silo (Lock-Free)"
+        Adapter2("Adapter Thread<br/>(WSS Client)"):::fastThread
+        Ring2[("SPSC RingBuffer<br/>(NormalizedEvent)")]:::buffer
+        Engine2("Risk Engine Thread<br/>(In-Memory State)"):::fastThread
+        
+        %% Output Queues
+        Q_DB2[("DB Queue (Events + CheckpointHints) 2<br/>(SPSC)")]:::buffer
+        Q_Alert2[("Alert Queue 2<br/>(SPSC)")]:::buffer
+    end
+
+    %% GLOBAL THREADS
+    subgraph "Global IO Handlers"
+        Persister("Persister Thread<br/>(Batch Writer)"):::slowThread
+        Alerter("AlertSender Thread<br/>(Dedup & Network)"):::slowThread
+    end
+
+    %% STORAGE & OUTPUTS
+    Postgres[("PostgreSQL DB<br/>(Events, Checkpoints)")]:::db
+    Clients[("Slack / Telegram / Webhook")]:::external
+
+    %% KAPCSOLATOK (Flow)
+    
+    %% Input Flow
+    ArbRPC -->|JSON Stream| Adapter1
+    BaseRPC -->|JSON Stream| Adapter2
+    
+    %% Internal Fast Path
+    Adapter1 -->|Push| Ring1
+    Ring1 -->|Pop & Process| Engine1
+    
+    Adapter2 -->|Push| Ring2
+    Ring2 -->|Pop & Process| Engine2
+
+    %% Output to Queues
+    Engine1 -->|Push Event/State| Q_DB1
+    Engine1 -->|Push Alert| Q_Alert1
+    
+    Engine2 -->|Push Event/State| Q_DB2
+    Engine2 -->|Push Alert| Q_Alert2
+
+    %% Global Consumption
+    Q_DB1 -.->|Poll| Persister
+    Q_DB2 -.->|Poll| Persister
+    
+    Q_Alert1 -.->|Poll| Alerter
+    Q_Alert2 -.->|Poll| Alerter
+
+    %% Final IO
+    Persister -->|Batch TRANSACTION| Postgres
+    Alerter -->|HTTP POST| Clients
+```
+
 ## Project status
 
 Early development / MVP phase

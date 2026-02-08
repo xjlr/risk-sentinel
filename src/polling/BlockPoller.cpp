@@ -4,7 +4,7 @@
 #include <thread>
 
 // ide jön a logger include-od, pl.
-// #include "log/Logger.hpp"
+#include "sentinel/log.hpp"
 
 BlockPoller::BlockPoller(
     ChainAdapter& adapter,
