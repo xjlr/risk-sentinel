@@ -26,6 +26,15 @@ CPMAddPackage(
   VERSION 1.14.1
 )
 
+# -------------------------------------------------------------------
+# rigtorp::SPSCQueue (Lock-free Ring Buffer)
+# -------------------------------------------------------------------
+CPMAddPackage(
+  NAME rigtorp_spsc_queue
+  GITHUB_REPOSITORY rigtorp/SPSCQueue
+  GIT_TAG master
+)
+
 # libcurl
 find_package(CURL REQUIRED)
 
@@ -41,9 +50,11 @@ add_library(sentinel_core
   src/db_checkpoint_store.cpp
   src/log.cpp
   src/rpc/JsonRpcClient.cpp
-  # src/polling/BlockPoller.cpp
+  src/events/normalize.cpp
+  src/events/EventSource.cpp
   src/chains/arbitrum/ArbitrumAdapter.cpp
 )
+
 
 target_include_directories(sentinel_core
   PUBLIC
@@ -67,6 +78,17 @@ target_link_libraries(sentinel_core
     ${PQXX_LIBRARIES}
     ${PQ_LIBRARIES}
 )
+
+# ---- Add rigtorp SPSC include/link to sentinel_core (robust)
+if(rigtorp_spsc_queue_ADDED)
+  if(TARGET rigtorp::SPSCQueue)
+    target_link_libraries(sentinel_core PUBLIC rigtorp::SPSCQueue)
+  else()
+    target_include_directories(sentinel_core PUBLIC
+      ${rigtorp_spsc_queue_SOURCE_DIR}/include
+    )
+  endif()
+endif()
 
 target_compile_options(sentinel_core PRIVATE
   ${PQXX_CFLAGS_OTHER}

@@ -65,3 +65,10 @@ uint64_t ArbitrumAdapter::latestBlock() {
 
     return block;
 }
+
+std::vector<sentinel::events::RawLog>
+    ArbitrumAdapter::getLogs(uint64_t from_block, uint64_t to_block) {
+        //TODO
+        return {};
+    }
+

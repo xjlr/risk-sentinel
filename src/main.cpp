@@ -7,6 +7,8 @@
 
 #include <pqxx/pqxx>
 
+#include <rigtorp/SPSCQueue.h>
+
 #include "sentinel/db_checkpoint_store.hpp"
 #include "sentinel/json.hpp"
 #include "sentinel/log.hpp"
@@ -15,6 +17,16 @@
 
 #include "sentinel/rpc/JsonRpcClient.hpp"
 #include "sentinel/chains/arbitrum/ArbitrumAdapter.hpp"
+#include "sentinel/events/NormalizedEvent.hpp"
+#include "sentinel/events/EventSource.hpp"
+
+//TODO : Remove 
+#include "sentinel/events/RawLog.hpp"
+
+using namespace sentinel::events;
+using RingBuffer = rigtorp::SPSCQueue<NormalizedEvent>;
+
+constexpr std::size_t RING_SIZE = 65536;
 
 static std::string getenv_or(const char* k, const char* defv) {
   if (const char* v = std::getenv(k)) return std::string(v);
@@ -39,7 +51,20 @@ int main(int argc, char** argv) {
   auto& Lcore   = sentinel::logger(sentinel::LogComponent::Core);
   auto& Ldb     = sentinel::logger(sentinel::LogComponent::Db);
   auto& Lrpc    = sentinel::logger(sentinel::LogComponent::Rpc);
-  auto& Lpoller = sentinel::logger(sentinel::LogComponent::Poller);
+  auto& Lsource = sentinel::logger(sentinel::LogComponent::EventSource);
+
+  RingBuffer buffer(RING_SIZE);
+  // TODO : Remove
+  sentinel::events::RawLog test;
+
+  buffer.push(NormalizedEvent{});
+
+  if (buffer.front()) { 
+        NormalizedEvent value = *buffer.front();
+        buffer.pop();
+        //std::cout << "Kivettem: " << ertek << std::endl;
+        Lcore.info("value from ring buffer={}", value.chain_id);
+  }
 
   Lcore.info("sentinel starting version={}", sentinel::kVersion);
 
@@ -112,6 +137,24 @@ int main(int argc, char** argv) {
   }
 
   JsonRpcClient rpc(rpc_url);
+  ArbitrumAdapter arbitrum_adapter{rpc};
+
+  EventSourceConfig cfg{
+    .start_block = 0,
+    .max_block_range = 1000,
+    .poll_interval = std::chrono::milliseconds(500)
+  };
+  EventSource source{ arbitrum_adapter, buffer, cfg };
+
+  std::jthread event_source_thread([&] {
+    source.run();
+  });
+
+  Lcore.info("Event Source started");
+  std::this_thread::sleep_for(std::chrono::seconds(3));
+  source.stop();
+
+#if 0
   ArbitrumAdapter arbitrum(rpc);
 
   // Sanity check
@@ -124,27 +167,28 @@ int main(int argc, char** argv) {
   }
 
   std::uint64_t lastProcessed = last;
-  Lpoller.info("starting block polling from {}", lastProcessed);
+  Lsource.info("starting block polling from {}", lastProcessed);
 
   while (true) {
     try {
       const std::uint64_t latest = arbitrum.latestBlock();
-      Lpoller.info("latest_block={} last_processed={}", latest, lastProcessed);
+      Lsource.info("latest_block={} last_processed={}", latest, lastProcessed);
 
       if (latest > lastProcessed) {
         for (std::uint64_t b = lastProcessed + 1; b <= latest; ++b) {
           store.upsert_checkpoint(chain, b);
           lastProcessed = b;
-          Lpoller.debug("checkpoint advanced -> {}", b);
+          Lsource.debug("checkpoint advanced -> {}", b);
         }
       }
     } catch (const std::exception& e) {
       // Non-fatal: keep running
-      Lpoller.warn("polling iteration failed: {}", e.what());
+      Lsource.warn("polling iteration failed: {}", e.what());
     }
 
     std::this_thread::sleep_for(std::chrono::seconds(5));
   }
+  #endif
 
   return 0;
 }

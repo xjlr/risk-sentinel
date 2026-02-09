@@ -6,7 +6,7 @@ namespace sentinel {
 enum class LogComponent : int {
     Core = 0,
     Rpc,
-    Poller,
+    EventSource,
     Adapter,
     Db,
     Alert,

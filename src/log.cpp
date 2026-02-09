@@ -11,7 +11,7 @@ static const char* component_name(LogComponent c) {
     switch (c) {
         case LogComponent::Core:    return "core";
         case LogComponent::Rpc:     return "rpc";
-        case LogComponent::Poller:  return "poller";
+        case LogComponent::EventSource:  return "source";
         case LogComponent::Adapter: return "adapter";
         case LogComponent::Db:      return "db";
         case LogComponent::Alert:   return "alert";

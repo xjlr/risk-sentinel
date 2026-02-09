@@ -12,6 +12,9 @@ public:
     uint64_t chainId() override;
     uint64_t latestBlock() override;
 
+    std::vector<sentinel::events::RawLog>
+    getLogs(uint64_t from_block, uint64_t to_block) override;
+
 private:
     JsonRpcClient& rpc_;
     spdlog::logger& log_;
