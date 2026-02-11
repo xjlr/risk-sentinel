@@ -5,6 +5,7 @@
 #include <string_view>
 #include <stdexcept>
 #include <algorithm>
+#include <format>
 
 namespace sentinel::events::utils {
 
@@ -41,6 +42,10 @@ inline void validate_hex(std::string_view hex) {
     if (((hex.size() - 2) % 2) != 0) {
         throw std::runtime_error("Hex string has odd length");
     }
+}
+
+inline std::string to_hex_quantity(uint64_t value) {
+    return std::format("{:#x}", value);
 }
 
 } // namespace sentinel::events::utils

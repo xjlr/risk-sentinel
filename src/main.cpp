@@ -78,6 +78,7 @@ int main(int argc, char** argv) {
     return 2;
   }
 
+  std::this_thread::sleep_for(std::chrono::seconds(3));
   Ldb.info("connecting to database");
   std::shared_ptr<pqxx::connection> conn;
   try {
@@ -142,7 +143,7 @@ int main(int argc, char** argv) {
   EventSourceConfig cfg{
     .start_block = 0,
     .max_block_range = 1000,
-    .poll_interval = std::chrono::milliseconds(500)
+    //.poll_interval = std::chrono::milliseconds(500)
   };
   EventSource source{ arbitrum_adapter, buffer, cfg };
 

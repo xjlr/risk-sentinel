@@ -162,6 +162,11 @@ Start the development environment:
 ./dev.sh
 ```
 
+If you want to drop local db before starting risk-sentinel:
+```bash
+RESET_DB=1 ./dev.sh
+```
+
 ## Dependencies
 
 ### Build-time

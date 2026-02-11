@@ -1,5 +1,6 @@
 #include "sentinel/chains/arbitrum/ArbitrumAdapter.hpp"
 #include "sentinel/log.hpp"
+#include "sentinel/events/utils/hex.hpp"
 
 #include <stdexcept>
 #include <string>
@@ -67,8 +68,60 @@ uint64_t ArbitrumAdapter::latestBlock() {
 }
 
 std::vector<sentinel::events::RawLog>
-    ArbitrumAdapter::getLogs(uint64_t from_block, uint64_t to_block) {
-        //TODO
-        return {};
+ArbitrumAdapter::getLogs(uint64_t from_block, uint64_t to_block) {
+    using nlohmann::json;
+    using sentinel::events::RawLog;
+
+    if (to_block < from_block) {
+        throw std::runtime_error("getLogs: to_block < from_block");
     }
+
+    json filter{
+        {"fromBlock", sentinel::events::utils::to_hex_quantity(from_block)},
+        {"toBlock",   sentinel::events::utils::to_hex_quantity(to_block)}
+        // later:
+        // {"address", json::array({ "0x...", "0x..." })}
+        // {"topics",  json::array({ "0x<topic0>", nullptr, nullptr, nullptr })}
+    };
+
+    log_.debug("RPC call: eth_getLogs filter={}", filter.dump());
+
+    // JSON-RPC params: [ filter ]
+    json params = json::array({filter});
+
+    // JsonRpcClient::call() returns the whole response
+    json res = rpc_.call("eth_getLogs", params);
+
+    if (!res.contains("result") || !res["result"].is_array()) {
+        log_.error("eth_getLogs: invalid response: {}", res.dump());
+        throw std::runtime_error("eth_getLogs: missing result array");
+    }
+
+    const auto& arr = res["result"];
+    log_.debug("eth_getLogs -> {} logs", arr.size());
+
+    // MVP debug; TODO : Remove later
+    if (arr.size() > 0 && arr.size() <= 5) {
+        log_.debug("eth_getLogs sample payload={}", arr.dump());
+    }
+
+    if (!arr.empty()) {
+        // A .dump(4) 4 spaces indentation
+        log_.debug("Sample log[0] structure:\n{}", arr[0].dump(4));
+    }
+
+    std::vector<RawLog> out;
+    out.reserve(arr.size());
+
+    for (const auto& jlog : arr) {
+        try {
+            out.push_back(jlog.get<RawLog>());
+        } catch (const std::exception& e) {
+            log_.error("RawLog parse failed: {} json={}", e.what(), jlog.dump());
+            throw;
+        }
+    }
+
+    return out;
+}
 
