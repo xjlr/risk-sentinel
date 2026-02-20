@@ -7,37 +7,12 @@
 
 namespace sentinel::events {
 
-namespace utils {
-
-// Minimal helpers – ide jön a te parse_hex_uint64 / parse_hex_bytes.
-// Feltételezem, hogy dobsz exceptiont hibánál.
-#if 0
-uint64_t parse_hex_uint64(std::string_view hex);
-
-template <std::size_t N>
-void parse_hex_bytes(std::string_view hex, std::array<uint8_t, N>& out);
-
-// Opcionális: validálja a "0x" prefixet és páros hosszot.
-inline void validate_hex(std::string_view hex) {
-    if (hex.size() < 2 || hex.substr(0,2) != "0x") {
-        throw std::runtime_error("Expected 0x-prefixed hex string");
-    }
-    if (((hex.size() - 2) % 2) != 0) {
-        throw std::runtime_error("Hex string has odd length");
-    }
-}
-#endif
-
-
-} // namespace utils
-
 void normalize(const RawLog& raw,
                NormalizedEvent& out,
                uint64_t chain_id,
                uint64_t block_timestamp)
 {
-    out = NormalizedEvent{}; // safe zero-init (ha nincs konstruktorod)
-
+    out = NormalizedEvent{}; // safe zero-init
     // Chain context
     out.chain_id = chain_id;
     out.block_timestamp = block_timestamp;
@@ -83,10 +58,6 @@ void normalize(const RawLog& raw,
         out.truncated = false;
     }
 
-    // parse only up to out.data_size bytes (helperednek ezt tudnia kell)
-    // Ha a parse_hex_bytes() mindig N byte-ot tölt, akkor itt inkább olyan kell,
-    // ami limitálható: parse_hex_bytes_prefix(raw.data, out.data.data(), out.data_size);
-    // MVP: töltsd a teljes out.data-t, de csak out.data_size-ot tekintsd érvényesnek:
     utils::parse_hex_bytes(raw.data, out.data);
 }
 
