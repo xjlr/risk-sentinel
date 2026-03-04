@@ -31,12 +31,6 @@ inline nlohmann::json to_json(const LogEvent& e) {
   };
 }
 
-inline nlohmann::json to_json(const NormalizedEvent& ne) {
-  return {
-    {"block", to_json(ne.block)},
-    {"tx", to_json(ne.tx)},
-    {"log", to_json(ne.log)}
-  };
-}
+
 
 } // namespace sentinel

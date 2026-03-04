@@ -7,7 +7,7 @@
 #include <rigtorp/SPSCQueue.h>
 
 #include "sentinel/events/RawLog.hpp"
-#include "sentinel/events/NormalizedEvent.hpp"
+#include "sentinel/risk/signal.hpp"
 #include "sentinel/events/normalize.hpp"
 #include "sentinel/log.hpp"
 
@@ -31,7 +31,7 @@ class EventSource {
 public:
     EventSource(
         ChainAdapter& adapter,
-        rigtorp::SPSCQueue<NormalizedEvent>& out_queue,
+        sentinel::risk::RingBuffer<sentinel::risk::Signal>& out_queue,
         EventSourceConfig cfg
     );
 
@@ -42,12 +42,12 @@ public:
     void stop();
 
 private:
-    void push_blocking(const NormalizedEvent& ev);
+    void push_blocking(const sentinel::risk::Signal& ev);
     bool poll_once();
 
 private:
     ChainAdapter& adapter_;
-    rigtorp::SPSCQueue<NormalizedEvent>& out_;
+    sentinel::risk::RingBuffer<sentinel::risk::Signal>& out_;
     uint64_t chain_id_;
 
     EventSourceConfig cfg_;

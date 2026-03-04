@@ -10,7 +10,7 @@ namespace sentinel::events {
 
 EventSource::EventSource(
     ChainAdapter& adapter,
-    rigtorp::SPSCQueue<NormalizedEvent>& out_queue,
+    sentinel::risk::RingBuffer<sentinel::risk::Signal>& out_queue,
     EventSourceConfig cfg
 )
     : adapter_(adapter)
@@ -51,7 +51,7 @@ void EventSource::run() {
 }
 
 
-void EventSource::push_blocking(const NormalizedEvent& ev) {
+void EventSource::push_blocking(const sentinel::risk::Signal& ev) {
     int retries = 0;
     while (!out_.try_push(ev)) {
         if ((retries++ % 1000) == 0) {
@@ -120,7 +120,7 @@ bool EventSource::poll_once() {
 
     // 4) Normalize + push (with backpressure)
     for (const RawLog& raw : logs) {
-        NormalizedEvent ev{};
+        sentinel::risk::Signal ev{};
         normalize(raw, ev, chain_id_, /*timestamp=*/0);
         push_blocking(ev);
     }

@@ -53,6 +53,8 @@ add_library(sentinel_core
   src/events/normalize.cpp
   src/events/EventSource.cpp
   src/chains/arbitrum/ArbitrumAdapter.cpp
+  src/risk/risk_engine.cpp
+  src/risk/alert_dispatcher.cpp
 )
 
 

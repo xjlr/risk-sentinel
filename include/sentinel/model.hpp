@@ -26,10 +26,5 @@ struct LogEvent {
   std::uint32_t log_index{};
 };
 
-struct NormalizedEvent {
-  BlockMeta block;
-  TxMeta tx;
-  LogEvent log;
-};
 
 } // namespace sentinel

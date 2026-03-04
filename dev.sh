@@ -16,7 +16,8 @@ set +a
 
 cmake -S . -B build/dev -G Ninja \
   -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-  -DENABLE_TESTS=ON
+  -DENABLE_TESTS=ON \
+  -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
 cmake --build build/dev -j"$(nproc)"
 
