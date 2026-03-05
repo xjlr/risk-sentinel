@@ -25,8 +25,9 @@ public:
 
   void register_rule(IRiskRule *rule);
 
-  void run();
+  void run(std::stop_token st = {});
   void stop();
+  bool is_finished() const { return finished_.load(std::memory_order_acquire); }
 
 private:
   RingBuffer<Signal> &input_queue_;
@@ -37,6 +38,7 @@ private:
   std::array<std::vector<IRiskRule *>, SignalTypeCount> routing_table_;
 
   std::atomic<bool> running_{true};
+  std::atomic<bool> finished_{false};
 };
 
 } // namespace sentinel::risk

@@ -55,6 +55,7 @@ add_library(sentinel_core
   src/chains/arbitrum/ArbitrumAdapter.cpp
   src/risk/risk_engine.cpp
   src/risk/alert_dispatcher.cpp
+  src/app/app.cpp
 )
 
 

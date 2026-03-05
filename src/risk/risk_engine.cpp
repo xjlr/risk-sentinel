@@ -21,18 +21,33 @@ void RiskEngine::register_rule(IRiskRule *rule) {
 
 void RiskEngine::stop() { running_.store(false, std::memory_order_relaxed); }
 
-void RiskEngine::run() {
+void RiskEngine::run(std::stop_token st) {
   // Pre-allocate alerts vector to avoid heap allocations in the hot path
   std::vector<Alert> alerts;
   alerts.reserve(64);
 
-  while (running_) {
+  bool drain_mode = false;
+
+  while (running_ && !st.stop_requested()) {
     // Read from lock-free queue
     auto *signal_ptr = input_queue_.front();
     if (signal_ptr) {
       // We have a signal, process it!
       Signal signal = std::move(*signal_ptr);
       input_queue_.pop();
+
+      // Check if it's a poison pill
+      if (signal.type == SignalType::Control) {
+        if (std::holds_alternative<ControlSignal>(signal.payload)) {
+          if (std::get<ControlSignal>(signal.payload).command ==
+              ControlSignal::Command::Stop) {
+            // Initiate drain phase
+            drain_mode = true;
+            // No more rules routing for ControlSignal MVP
+            continue;
+          }
+        }
+      }
 
       alerts.clear();
 
@@ -56,10 +71,15 @@ void RiskEngine::run() {
         dispatcher_.dispatch(alert);
       }
     } else {
+      if (drain_mode) {
+        // Queue is completely empty and we are draining, clean exit
+        break;
+      }
       // Queue is empty, yield to save CPU
       std::this_thread::yield();
     }
   }
+  finished_.store(true, std::memory_order_release);
 }
 
 } // namespace sentinel::risk

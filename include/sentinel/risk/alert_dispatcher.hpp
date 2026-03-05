@@ -22,7 +22,7 @@ public:
   AlertDispatcher(const AlertDispatcher &) = delete;
   AlertDispatcher &operator=(const AlertDispatcher &) = delete;
 
-  void run();
+  void run(std::stop_token st = {});
   void stop();
 
   void dispatch(Alert alert);

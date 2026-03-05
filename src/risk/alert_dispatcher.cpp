@@ -21,13 +21,15 @@ void AlertDispatcher::dispatch(Alert alert) {
   cv_.notify_one();
 }
 
-void AlertDispatcher::run() {
+void AlertDispatcher::run(std::stop_token st) {
   running_.store(true, std::memory_order_relaxed);
-  while (running_) {
+  while (running_ && !st.stop_requested()) {
     Alert alert;
     {
       std::unique_lock<std::mutex> lock(mutex_);
-      cv_.wait(lock, [this]() { return !queue_.empty() || !running_; });
+      cv_.wait(lock, [this, &st]() {
+        return !queue_.empty() || !running_ || st.stop_requested();
+      });
 
       if (!running_ && queue_.empty()) {
         break;
