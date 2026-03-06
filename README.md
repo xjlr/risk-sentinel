@@ -139,8 +139,10 @@ Current state:
 
 ### clangd setup
 
+```bash
 cmake -S . -B build/dev -G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 ln -s build/dev/compile_commands.json compile_commands.json
+```
 
 ## Environment configuration
 
