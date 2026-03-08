@@ -2,76 +2,104 @@
 #include "sentinel/events/utils/hex.hpp"
 
 #include <algorithm>
+#include <limits>
 #include <stdexcept>
-#include <string_view>
 
 namespace sentinel::events {
 
-void normalize(const RawLog& raw,
-               sentinel::risk::Signal& out,
-               uint64_t chain_id,
-               uint64_t block_timestamp)
-{
-    out = sentinel::risk::Signal{}; // safe zero-init
-    
-    // Convert RawLog topics to check semantics. For now, we set a default type
-    // and rely on a normalizer mapping in the future.
-    // The spec says: topic0 == SWAP_TOPIC -> SignalType::Swap
-    // Here we will just assign SignalType::Swap as a placeholder if topic counts > 0.
-    // In a real system, we'd have a mapping.
-    out.type = sentinel::risk::SignalType::Swap;
+namespace {
 
-    // Meta (hex -> integers)
-    out.meta.timestamp_ms = block_timestamp;
-    out.meta.block_number = utils::parse_hex_uint64(raw.blockNumber);
-    out.meta.is_final = false; // By default; Reorg logic happens before/elsewhere
-    out.meta.source_id = static_cast<uint32_t>(chain_id);
-    std::array<uint8_t, 32> tx_hash;
-    utils::parse_hex_bytes(raw.transactionHash, tx_hash);
-    out.meta.tx_hash = tx_hash;
+constexpr auto TOPIC_TRANSFER = utils::parse_topic_literal(
+    "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef");
+constexpr auto TOPIC_SWAP_V2 = utils::parse_topic_literal(
+    "0xd78ad95fa46c994b6551d0da85fc275fe613ce37657fb8d5e3d130840159d822");
+constexpr auto TOPIC_SWAP_V3 = utils::parse_topic_literal(
+    "0xc42079f94a6350d7e5735f2a153e368fc95153e172ee90824036511a8fb417b3");
+constexpr auto TOPIC_MINT = utils::parse_topic_literal(
+    "0x4c209b5fc8ad50758f13e2e1088ba56a560dff694af163234d7f6c31034c568d");
+constexpr auto TOPIC_BURN = utils::parse_topic_literal(
+    "0xdccd28e36055d506992d9d40a08e08d6691c9569707248066f2c2f82998396e9");
 
-    // Payload: EvmLogEvent
-    sentinel::risk::EvmLogEvent evm{};
-    evm.chain_id = chain_id;
-    
-    const uint64_t txi = utils::parse_hex_uint64(raw.transactionIndex);
-    const uint64_t lgi = utils::parse_hex_uint64(raw.logIndex);
+sentinel::risk::SignalType
+classify_topic0(const std::array<uint8_t, 32> &topic0) {
+  if (topic0 == TOPIC_TRANSFER)
+    return sentinel::risk::SignalType::Transfer;
+  if (topic0 == TOPIC_SWAP_V2)
+    return sentinel::risk::SignalType::Swap;
+  if (topic0 == TOPIC_SWAP_V3)
+    return sentinel::risk::SignalType::Swap;
+  if (topic0 == TOPIC_MINT)
+    return sentinel::risk::SignalType::LiquidityChange;
+  if (topic0 == TOPIC_BURN)
+    return sentinel::risk::SignalType::LiquidityChange;
+  return sentinel::risk::SignalType::Unknown;
+}
 
-    if (txi > std::numeric_limits<uint32_t>::max() ||
-        lgi > std::numeric_limits<uint32_t>::max()) {
-        throw std::runtime_error("tx_index/log_index out of range");
-    }
+} // namespace
 
-    evm.tx_index  = static_cast<uint32_t>(txi);
-    evm.log_index = static_cast<uint32_t>(lgi);
-    evm.removed = raw.removed;
+void normalize(const RawLog &raw, sentinel::risk::Signal &out,
+               uint64_t chain_id, uint64_t block_timestamp) {
+  out = sentinel::risk::Signal{}; // safe zero-init
 
-    // Address
-    utils::parse_hex_bytes(raw.address, evm.address);
+  // Signal classification will be done after payload extraction
 
-    // Topics (max 4)
-    const std::size_t tc = std::min<std::size_t>(raw.topics.size(), 4);
-    evm.topic_count = static_cast<uint8_t>(tc);
+  // Meta (hex -> integers)
+  out.meta.timestamp_ms = block_timestamp;
+  out.meta.block_number = utils::parse_hex_uint64(raw.blockNumber);
+  out.meta.is_final = false; // By default; Reorg logic happens before/elsewhere
+  out.meta.source_id = static_cast<uint32_t>(chain_id);
+  std::array<uint8_t, 32> tx_hash;
+  utils::parse_hex_bytes(raw.transactionHash, tx_hash);
+  out.meta.tx_hash = tx_hash;
 
-    for (std::size_t i = 0; i < tc; ++i) {
-        utils::parse_hex_bytes(raw.topics[i], evm.topics[i]);
-    }
+  // Payload: EvmLogEvent
+  sentinel::risk::EvmLogEvent evm{};
+  evm.chain_id = chain_id;
 
-    // Data (truncate)
-    utils::validate_hex(raw.data);
-    const std::size_t byte_len = (raw.data.size() - 2) / 2;
+  const uint64_t txi = utils::parse_hex_uint64(raw.transactionIndex);
+  const uint64_t lgi = utils::parse_hex_uint64(raw.logIndex);
 
-    if (byte_len > evm.data.size()) {
-        evm.data_size = static_cast<uint32_t>(evm.data.size());
-        evm.truncated = true;
-    } else {
-        evm.data_size = static_cast<uint32_t>(byte_len);
-        evm.truncated = false;
-    }
+  if (txi > std::numeric_limits<uint32_t>::max() ||
+      lgi > std::numeric_limits<uint32_t>::max()) {
+    throw std::runtime_error("tx_index/log_index out of range");
+  }
 
-    utils::parse_hex_bytes(raw.data, evm.data);
-    
-    out.payload = evm;
+  evm.tx_index = static_cast<uint32_t>(txi);
+  evm.log_index = static_cast<uint32_t>(lgi);
+  evm.removed = raw.removed;
+
+  // Address
+  utils::parse_hex_bytes(raw.address, evm.address);
+
+  // Topics (max 4)
+  const std::size_t tc = std::min<std::size_t>(raw.topics.size(), 4);
+  evm.topic_count = static_cast<uint8_t>(tc);
+
+  for (std::size_t i = 0; i < tc; ++i) {
+    utils::parse_hex_bytes(raw.topics[i], evm.topics[i]);
+  }
+
+  // Data (truncate)
+  utils::validate_hex(raw.data);
+  const std::size_t byte_len = (raw.data.size() - 2) / 2;
+
+  if (byte_len > evm.data.size()) {
+    evm.data_size = static_cast<uint32_t>(evm.data.size());
+    evm.truncated = true;
+  } else {
+    evm.data_size = static_cast<uint32_t>(byte_len);
+    evm.truncated = false;
+  }
+
+  utils::parse_hex_bytes(raw.data, evm.data);
+
+  out.payload = evm;
+
+  if (evm.topic_count > 0) {
+    out.type = classify_topic0(evm.topics[0]);
+  } else {
+    out.type = sentinel::risk::SignalType::Unknown;
+  }
 }
 
 } // namespace sentinel::events
