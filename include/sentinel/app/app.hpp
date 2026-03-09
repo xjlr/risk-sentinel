@@ -80,6 +80,9 @@ private:
   std::jthread event_source_thread_;
   std::jthread dispatcher_thread_;
   std::jthread risk_engine_thread_;
+
+  // Rules ownership
+  std::vector<std::unique_ptr<sentinel::risk::IRiskRule>> rules_;
 };
 
 } // namespace sentinel::app

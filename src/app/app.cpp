@@ -6,8 +6,10 @@
 #include <pqxx/pqxx>
 
 #include "sentinel/db_checkpoint_store.hpp"
+#include "sentinel/events/utils/hex.hpp"
 #include "sentinel/log.hpp"
 #include "sentinel/risk/rules/example_rule.hpp"
+#include "sentinel/risk/rules/large_transfer_rule.hpp"
 #include "sentinel/version.hpp"
 
 #ifdef __linux__
@@ -106,14 +108,25 @@ bool App::init_db_() {
     return false;
   }
 
-  try {
-    conn_ = std::make_shared<pqxx::connection>(cfg_.database_url);
-    if (!conn_->is_open()) {
-      Ldb.critical("database connection not open");
-      return false;
+  int retries = 15;
+  while (retries > 0) {
+    try {
+      conn_ = std::make_shared<pqxx::connection>(cfg_.database_url);
+      if (conn_->is_open()) {
+        break;
+      }
+    } catch (const std::exception &e) {
+      Ldb.warn("Database connection failed ({} retries left): {}", retries - 1,
+               e.what());
     }
-  } catch (const std::exception &e) {
-    Ldb.critical("database connection failed: {}", e.what());
+    retries--;
+    if (retries > 0) {
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+  }
+
+  if (!conn_ || !conn_->is_open()) {
+    Ldb.critical("Failed to connect to database after all retries.");
     return false;
   }
 
@@ -168,10 +181,25 @@ void App::init_modules_() {
 }
 
 void App::register_rules_() {
-  // We allocate rule on heap and leak it intentionally since the process dies
-  // right after, or we could manage it. For now, keep it simple.
-  static sentinel::risk::ExampleLargeSwapRule example_rule;
-  risk_engine_->register_rule(&example_rule);
+  // Register Example Rule
+  auto example_rule = std::make_unique<sentinel::risk::ExampleLargeSwapRule>();
+  risk_engine_->register_rule(example_rule.get());
+  rules_.push_back(std::move(example_rule));
+
+  // Register LargeTransferRule
+  // USDT Arbitrum address: 0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9
+  std::array<uint8_t, 20> usdt_arb = {0xfd, 0x08, 0x6b, 0xc7, 0xcd, 0x5c, 0x48,
+                                      0x1d, 0xcc, 0x9c, 0x85, 0xeb, 0xe4, 0x78,
+                                      0xa1, 0xc0, 0xb6, 0x9f, 0xcb, 0xb9};
+
+  // Dummy threshold: 10,000,000,000 (USDT has 6 decimals, so 10,000 USDT)
+  auto threshold = sentinel::events::utils::to_be_256(10'000'000'000ULL);
+  // auto threshold = sentinel::events::utils::to_be_256(100'000'000ULL);
+
+  auto large_transfer_rule =
+      std::make_unique<sentinel::risk::LargeTransferRule>(usdt_arb, threshold);
+  risk_engine_->register_rule(large_transfer_rule.get());
+  rules_.push_back(std::move(large_transfer_rule));
 }
 
 void App::start_threads_() {

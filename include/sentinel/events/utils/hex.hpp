@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <cstring>
 #include <format>
 #include <stdexcept>
 #include <string_view>
@@ -87,6 +88,56 @@ inline void validate_hex(std::string_view hex) {
 
 inline std::string to_hex_quantity(uint64_t value) {
   return std::format("{:#x}", value);
+}
+
+inline std::array<uint8_t, 32> to_be_256(uint64_t value) {
+  std::array<uint8_t, 32> result{};
+  for (int i = 0; i < 8; ++i) {
+    result[31 - i] = static_cast<uint8_t>((value >> (i * 8)) & 0xFF);
+  }
+  return result;
+}
+
+// Compares two 32-byte big-endian values. Returns true if lhs > rhs.
+inline bool greater_be_256(const uint8_t *lhs, const uint8_t *rhs) {
+  return std::memcmp(lhs, rhs, 32) > 0;
+}
+
+// Converts a 32-byte big-endian value to a base-10 string
+inline std::string uint256_be_to_decimal(const uint8_t *data) {
+  std::array<uint8_t, 32> buffer;
+  std::memcpy(buffer.data(), data, 32);
+
+  bool is_zero = true;
+  for (int i = 0; i < 32; ++i) {
+    if (buffer[i] != 0) {
+      is_zero = false;
+      break;
+    }
+  }
+
+  if (is_zero) {
+    return "0";
+  }
+
+  std::string result;
+  is_zero = false;
+  while (!is_zero) {
+    uint32_t remainder = 0;
+    is_zero = true;
+    for (int i = 0; i < 32; ++i) {
+      uint32_t num = (remainder << 8) | buffer[i];
+      buffer[i] = static_cast<uint8_t>(num / 10);
+      remainder = num % 10;
+      if (buffer[i] != 0) {
+        is_zero = false;
+      }
+    }
+    result.push_back(static_cast<char>('0' + remainder));
+  }
+
+  std::reverse(result.begin(), result.end());
+  return result;
 }
 
 } // namespace sentinel::events::utils
