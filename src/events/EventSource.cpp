@@ -1,5 +1,6 @@
 #include "sentinel/events/EventSource.hpp"
 
+#include <chrono>
 #include <thread>
 #include <vector>
 
@@ -113,10 +114,25 @@ bool EventSource::poll_once() {
     }
   }
 
-  // 4) Normalize + push (with backpressure)
+  // 4) Fetch batch timestamp, then Normalize + push (with backpressure)
+  uint64_t batch_timestamp_ms = 0;
+  try {
+    batch_timestamp_ms = adapter_.blockTimestamp(to_block) * 1000;
+    log_.debug("Batch timestamp: to_block={} ts_ms={}", to_block,
+               batch_timestamp_ms);
+  } catch (const std::exception &e) {
+    log_.warn("Failed to fetch blockTimestamp for batch to_block {}: {}. "
+              "Falling back to system clock.",
+              to_block, e.what());
+    batch_timestamp_ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch())
+            .count();
+  }
+
   for (const RawLog &raw : logs) {
     sentinel::risk::Signal ev{};
-    normalize(raw, ev, chain_id_, /*timestamp=*/0);
+    normalize(raw, ev, chain_id_, batch_timestamp_ms);
     push_blocking(ev);
   }
 

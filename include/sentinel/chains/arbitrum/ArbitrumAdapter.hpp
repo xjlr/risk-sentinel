@@ -1,22 +1,22 @@
 #pragma once
 #include "sentinel/chains/ChainAdapter.hpp"
-#include "sentinel/rpc/JsonRpcClient.hpp"
 #include "sentinel/log.hpp"
+#include "sentinel/rpc/JsonRpcClient.hpp"
 
 class ArbitrumAdapter : public ChainAdapter {
 public:
-    explicit ArbitrumAdapter(JsonRpcClient& rpc);
+  explicit ArbitrumAdapter(JsonRpcClient &rpc);
 
-    std::string name() const override;
+  std::string name() const override;
 
-    uint64_t chainId() override;
-    uint64_t latestBlock() override;
+  uint64_t chainId() override;
+  uint64_t latestBlock() override;
+  uint64_t blockTimestamp(uint64_t block_number) override;
 
-    std::vector<sentinel::events::RawLog>
-    getLogs(uint64_t from_block, uint64_t to_block) override;
+  std::vector<sentinel::events::RawLog> getLogs(uint64_t from_block,
+                                                uint64_t to_block) override;
 
 private:
-    JsonRpcClient& rpc_;
-    spdlog::logger& log_;
+  JsonRpcClient &rpc_;
+  spdlog::logger &log_;
 };
-
