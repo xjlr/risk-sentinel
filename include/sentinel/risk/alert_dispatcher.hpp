@@ -2,11 +2,15 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <memory>
 #include <mutex>
 #include <queue>
 #include <string>
+#include <vector>
 
 namespace sentinel::risk {
+
+class IAlertChannel;
 
 struct Alert {
   std::string message;
@@ -22,12 +26,15 @@ public:
   AlertDispatcher(const AlertDispatcher &) = delete;
   AlertDispatcher &operator=(const AlertDispatcher &) = delete;
 
+  void add_channel(std::unique_ptr<IAlertChannel> channel);
+
   void run(std::stop_token st = {});
   void stop();
 
   void dispatch(Alert alert);
 
 private:
+  std::vector<std::unique_ptr<IAlertChannel>> channels_;
   std::queue<Alert> queue_;
   std::mutex mutex_;
   std::condition_variable cv_;

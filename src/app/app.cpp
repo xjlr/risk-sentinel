@@ -8,8 +8,10 @@
 #include "sentinel/db_checkpoint_store.hpp"
 #include "sentinel/events/utils/hex.hpp"
 #include "sentinel/log.hpp"
+#include "sentinel/risk/console_alert_channel.hpp"
 #include "sentinel/risk/rules/example_rule.hpp"
 #include "sentinel/risk/rules/large_transfer_rule.hpp"
+#include "sentinel/risk/telegram_alert_channel.hpp"
 #include "sentinel/version.hpp"
 
 #ifdef __linux__
@@ -176,6 +178,19 @@ void App::init_modules_() {
       *arbitrum_adapter_, *ring_buffer_, cfg_.event_source_cfg);
 
   dispatcher_ = std::make_unique<sentinel::risk::AlertDispatcher>();
+  dispatcher_->add_channel(
+      std::make_unique<sentinel::risk::ConsoleAlertChannel>());
+
+  // Telegram alert channel can be registered here if token/chat_id are provided
+  // in config
+  if (const char *bot_token = std::getenv("TELEGRAM_BOT_TOKEN"); bot_token) {
+    if (const char *chat_id = std::getenv("TELEGRAM_CHAT_ID"); chat_id) {
+      dispatcher_->add_channel(
+          std::make_unique<sentinel::risk::TelegramAlertChannel>(bot_token,
+                                                                 chat_id));
+    }
+  }
+
   risk_engine_ =
       std::make_unique<sentinel::risk::RiskEngine>(*ring_buffer_, *dispatcher_);
 }
@@ -194,6 +209,7 @@ void App::register_rules_() {
 
   // Dummy threshold: 10,000,000,000 (USDT has 6 decimals, so 10,000 USDT)
   auto threshold = sentinel::events::utils::to_be_256(10'000'000'000ULL);
+  // jlr
   // auto threshold = sentinel::events::utils::to_be_256(100'000'000ULL);
 
   auto large_transfer_rule =

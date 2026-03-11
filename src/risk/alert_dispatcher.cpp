@@ -1,5 +1,8 @@
 #include "sentinel/risk/alert_dispatcher.hpp"
-#include <iostream>
+#include "sentinel/log.hpp"
+#include "sentinel/risk/alert_channel.hpp"
+#include <cassert>
+#include <exception>
 
 namespace sentinel::risk {
 
@@ -7,12 +10,18 @@ AlertDispatcher::AlertDispatcher() = default;
 
 AlertDispatcher::~AlertDispatcher() { stop(); }
 
+// Please note: currently this function is not thread-safe and should only be
+// called from the main thread.
+void AlertDispatcher::add_channel(std::unique_ptr<IAlertChannel> channel) {
+  assert(!running_.load(std::memory_order_relaxed));
+  if (channel) {
+    channels_.push_back(std::move(channel));
+  }
+}
+
 void AlertDispatcher::stop() {
   running_.store(false, std::memory_order_relaxed);
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    cv_.notify_all();
-  }
+  cv_.notify_all();
 }
 
 void AlertDispatcher::dispatch(Alert alert) {
@@ -23,26 +32,43 @@ void AlertDispatcher::dispatch(Alert alert) {
 
 void AlertDispatcher::run(std::stop_token st) {
   running_.store(true, std::memory_order_relaxed);
-  while (running_ && !st.stop_requested()) {
+  while (true) {
     Alert alert;
     {
       std::unique_lock<std::mutex> lock(mutex_);
       cv_.wait(lock, [this, &st]() {
-        return !queue_.empty() || !running_ || st.stop_requested();
+        return !queue_.empty() || !running_.load(std::memory_order_relaxed) ||
+               st.stop_requested();
       });
 
-      if (!running_ && queue_.empty()) {
+      bool is_shutdown =
+          !running_.load(std::memory_order_relaxed) || st.stop_requested();
+
+      if (queue_.empty() && is_shutdown) {
         break;
+      }
+
+      if (queue_.empty()) {
+        continue;
       }
 
       alert = std::move(queue_.front());
       queue_.pop();
     }
 
-    // Spec 2.1: Performs HTTP/webhook I/O and may rate-limit
-    // Mock HTTP/webhook I/O output to std::cout
-    std::cout << "[AlertDispatcher] Executing Webhook for: " << alert.message
-              << " [Time: " << alert.timestamp_ms << "]\n";
+    for (const auto &channel : channels_) {
+      if (channel) {
+        try {
+          channel->send(alert);
+        } catch (const std::exception &e) {
+          sentinel::logger(sentinel::LogComponent::Alert)
+              .error("Exception in alert channel send: {}", e.what());
+        } catch (...) {
+          sentinel::logger(sentinel::LogComponent::Alert)
+              .error("Unknown exception in alert channel send");
+        }
+      }
+    }
   }
 }
 
