@@ -14,6 +14,14 @@ set -a
 source .env
 set +a
 
+echo "[dev] Waiting for PostgreSQL to be ready..."
+until pg_isready -d "$DATABASE_URL" -q; do
+  sleep 1
+done
+
+echo "[dev] PostgreSQL is ready. Bootstrapping database..."
+./scripts/db_apply.sh
+
 cmake -S . -B build/dev -G Ninja \
   -DCMAKE_BUILD_TYPE=RelWithDebInfo \
   -DENABLE_TESTS=ON \

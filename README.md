@@ -5,15 +5,13 @@ Risk Sentinel is a low-latency, on-chain risk monitoring engine for DeFi protoco
 The goal of the project is to provide early, low-noise alerts for critical on-chain risks such as:
 
 - sudden liquidity drain or imbalance
-
 - oracle anomalies
-
 - governance-related attacks
-
 - treasury exfiltration patterns
 
 Unlike generic blockchain analytics dashboards, Risk Sentinel focuses on customer-specific exposure:
 alerts are triggered only when an event is actually relevant to a given protocol or treasury.
+Rule configs are stored per customer, and alert relevance will be evaluated against these configs before delivery.
 
 This repository currently contains the MVP infrastructure and core scaffolding.
 Detection logic and risk models are evolving as part of an iterative build.
@@ -119,7 +117,20 @@ Current state:
 
 ### Development
 
-- Linux (Ubuntu 22.04 recommended)
+- Linux (Ubuntu 22.04 or 24.04 recommended)
+
+- PostgreSQL client tools (`psql`, `pg_isready`) on the host
+
+For Ubuntu, you can install the required client tools (which provide both `psql` and `pg_isready`) with:
+```bash
+sudo apt update
+sudo apt install postgresql-client
+```
+To verify the installation:
+```bash
+which psql
+which pg_isready
+```
 
 - C++20 compatible compiler (g++ ≥ 11 or clang ≥ 14)
 
@@ -163,6 +174,18 @@ For local development, PostgreSQL is started via Docker, while the application
 is built and executed natively on the host. This avoids expensive Docker rebuilds
 during active development while keeping the runtime environment consistent.
 
+The development workflow is driven by `dev.sh` and follows this host-driven database setup flow:
+1. Starts the PostgreSQL container via Docker Compose.
+2. Waits until the database is ready using `pg_isready`.
+3. Applies the database schema.
+4. Applies the development seed data.
+5. Builds and runs the Risk Sentinel application natively.
+
+This host-driven setup utilizes the following files:
+- `db/001_schema.sql`: Database schema definitions.
+- `db/002_seed_dev.sql`: Development seed data.
+- `scripts/db_apply.sh`: The script responsible for applying the database scripts.
+
 Start the development environment:
 
 ```bash
@@ -198,6 +221,8 @@ RESET_DB=1 ./dev.sh
 - `dev.sh` – local development helper script
 - `.env` – local environment variables (not committed)
 - `build/` – out-of-tree build artifacts
+- `scripts/` – local development helper scripts
+- `db/` – database schema and seed scripts
 
 ## Building locally (without Docker)
 
