@@ -7,11 +7,13 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <unordered_map>
 
 #include "sentinel/chains/arbitrum/ArbitrumAdapter.hpp"
 #include "sentinel/events/EventSource.hpp"
 #include "sentinel/risk/alert_dispatcher.hpp"
 #include "sentinel/risk/risk_engine.hpp"
+#include "sentinel/risk/rules/large_transfer_rule.hpp"
 #include "sentinel/risk/signal.hpp"
 #include "sentinel/rpc/JsonRpcClient.hpp"
 
@@ -50,6 +52,10 @@ private:
   bool init_logging_();
   bool init_db_();
   void init_modules_();
+  std::vector<sentinel::risk::LargeTransferRuleConfig>
+  load_large_transfer_configs_();
+  void load_customer_map_();
+  void load_token_map_();
   void register_rules_();
   void start_threads_();
   void stop_orderly_();
@@ -58,6 +64,11 @@ private:
   void remove_readiness_file_();
 
   AppConfig cfg_;
+
+  std::unordered_map<sentinel::risk::CustomerId, std::string>
+      customer_id_to_key_;
+  std::unordered_map<sentinel::risk::TokenKey, std::string>
+      token_addresses_to_symbols_;
 
   std::atomic<bool> stop_requested_{false};
   std::atomic<bool> stopped_{false};

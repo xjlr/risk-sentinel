@@ -31,9 +31,12 @@ size_t string_write_cb(char *ptr, size_t size, size_t nmemb,
 }
 } // namespace
 
-TelegramAlertChannel::TelegramAlertChannel(std::string bot_token,
-                                           std::string chat_id)
-    : bot_token_(std::move(bot_token)), chat_id_(std::move(chat_id)) {}
+TelegramAlertChannel::TelegramAlertChannel(
+    std::string bot_token, std::string chat_id,
+    const std::unordered_map<std::uint64_t, std::string> *customer_map,
+    const std::unordered_map<TokenKey, std::string> *token_map)
+    : bot_token_(std::move(bot_token)), chat_id_(std::move(chat_id)),
+      customer_map_(customer_map), token_map_(token_map) {}
 
 TelegramAlertChannel::~TelegramAlertChannel() = default;
 
@@ -51,10 +54,31 @@ void TelegramAlertChannel::send(const Alert &alert) {
   std::string url =
       "https://api.telegram.org/bot" + bot_token_ + "/sendMessage";
 
+  std::string customer_key = std::to_string(alert.customer_id);
+  if (customer_map_ && customer_map_->contains(alert.customer_id)) {
+    customer_key = customer_map_->at(alert.customer_id);
+  }
+
+  std::string symbol_or_contract = alert.token_address;
+  if (!alert.token_address.empty()) {
+    TokenKey key{alert.chain_id, alert.token_address};
+    if (token_map_ && token_map_->contains(key)) {
+      symbol_or_contract = token_map_->at(key);
+    }
+  }
+
+  std::string text = "[Risk Sentinel Alert]\n";
+  text += "Customer: " + customer_key + "\n";
+  text += "Message: " + alert.message + "\n";
+  if (!alert.amount_decimal.empty()) {
+    text += "Amount: " + alert.amount_decimal + "\n";
+    text += "Token: " + symbol_or_contract + "\n";
+  }
+  text += "Time: " + std::to_string(alert.timestamp_ms);
+
   nlohmann::json payload;
   payload["chat_id"] = chat_id_;
-  payload["text"] = "[Risk Sentinel Alert]\nMessage: " + alert.message +
-                    "\nTime: " + std::to_string(alert.timestamp_ms);
+  payload["text"] = text;
 
   std::string json_str = payload.dump();
 

@@ -12,9 +12,25 @@ namespace sentinel::risk {
 
 class IAlertChannel;
 
+using CustomerId = std::uint64_t;
+
+struct TokenKey {
+  uint64_t chain_id;
+  std::string token_address;
+
+  bool operator==(const TokenKey &other) const {
+    return chain_id == other.chain_id && token_address == other.token_address;
+  }
+};
+
 struct Alert {
+  CustomerId customer_id;
+  std::string rule_type;
   std::string message;
   uint64_t timestamp_ms;
+  std::string amount_decimal;
+  std::string token_address;
+  uint64_t chain_id;
 };
 
 class AlertDispatcher {
@@ -42,3 +58,12 @@ private:
 };
 
 } // namespace sentinel::risk
+
+namespace std {
+template <> struct hash<sentinel::risk::TokenKey> {
+  std::size_t operator()(const sentinel::risk::TokenKey &key) const {
+    return std::hash<uint64_t>()(key.chain_id) ^
+           (std::hash<std::string>()(key.token_address) << 1);
+  }
+};
+} // namespace std

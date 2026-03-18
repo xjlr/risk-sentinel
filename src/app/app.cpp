@@ -9,10 +9,11 @@
 #include "sentinel/events/utils/hex.hpp"
 #include "sentinel/log.hpp"
 #include "sentinel/risk/console_alert_channel.hpp"
-#include "sentinel/risk/rules/example_rule.hpp"
 #include "sentinel/risk/rules/large_transfer_rule.hpp"
 #include "sentinel/risk/telegram_alert_channel.hpp"
 #include "sentinel/version.hpp"
+
+#include <nlohmann/json.hpp>
 
 #ifdef __linux__
 #include <pthread.h>
@@ -177,6 +178,9 @@ void App::init_modules_() {
   event_source_ = std::make_unique<sentinel::events::EventSource>(
       *arbitrum_adapter_, *ring_buffer_, cfg_.event_source_cfg);
 
+  load_customer_map_();
+  load_token_map_();
+
   dispatcher_ = std::make_unique<sentinel::risk::AlertDispatcher>();
   dispatcher_->add_channel(
       std::make_unique<sentinel::risk::ConsoleAlertChannel>());
@@ -186,8 +190,9 @@ void App::init_modules_() {
   if (const char *bot_token = std::getenv("TELEGRAM_BOT_TOKEN"); bot_token) {
     if (const char *chat_id = std::getenv("TELEGRAM_CHAT_ID"); chat_id) {
       dispatcher_->add_channel(
-          std::make_unique<sentinel::risk::TelegramAlertChannel>(bot_token,
-                                                                 chat_id));
+          std::make_unique<sentinel::risk::TelegramAlertChannel>(
+              bot_token, chat_id, &customer_id_to_key_,
+              &token_addresses_to_symbols_));
     }
   }
 
@@ -196,26 +201,107 @@ void App::init_modules_() {
 }
 
 void App::register_rules_() {
-  // Register Example Rule
-  auto example_rule = std::make_unique<sentinel::risk::ExampleLargeSwapRule>();
-  risk_engine_->register_rule(example_rule.get());
-  rules_.push_back(std::move(example_rule));
-
   // Register LargeTransferRule
-  // USDT Arbitrum address: 0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9
-  std::array<uint8_t, 20> usdt_arb = {0xfd, 0x08, 0x6b, 0xc7, 0xcd, 0x5c, 0x48,
-                                      0x1d, 0xcc, 0x9c, 0x85, 0xeb, 0xe4, 0x78,
-                                      0xa1, 0xc0, 0xb6, 0x9f, 0xcb, 0xb9};
-
-  // Dummy threshold: 10,000,000,000 (USDT has 6 decimals, so 10,000 USDT)
-  auto threshold = sentinel::events::utils::to_be_256(10'000'000'000ULL);
-  // jlr
-  // auto threshold = sentinel::events::utils::to_be_256(100'000'000ULL);
+  auto configs = load_large_transfer_configs_();
+  if (configs.empty()) {
+    auto &Lcore = sentinel::logger(sentinel::LogComponent::Core);
+    Lcore.warn("No large_transfer configurations loaded from DB");
+  }
 
   auto large_transfer_rule =
-      std::make_unique<sentinel::risk::LargeTransferRule>(usdt_arb, threshold);
+      std::make_unique<sentinel::risk::LargeTransferRule>(std::move(configs));
   risk_engine_->register_rule(large_transfer_rule.get());
   rules_.push_back(std::move(large_transfer_rule));
+}
+
+std::vector<sentinel::risk::LargeTransferRuleConfig>
+App::load_large_transfer_configs_() {
+  auto &Ldb = sentinel::logger(sentinel::LogComponent::Db);
+  std::vector<sentinel::risk::LargeTransferRuleConfig> configs;
+
+  try {
+    pqxx::work tx(*conn_);
+
+    std::string query = R"(
+      SELECT
+        c.id as customer_id,
+        r.params_jsonb
+      FROM customer_risk_rules r
+      JOIN customers c ON r.customer_id = c.id
+      WHERE r.rule_type = 'large_transfer'
+        AND r.enabled = true
+    )";
+
+    pqxx::result res = tx.exec(query);
+
+    for (const auto &row : res) {
+      uint64_t customer_id = row["customer_id"].as<uint64_t>();
+      std::string params_str = row["params_jsonb"].as<std::string>();
+
+      try {
+        nlohmann::json params = nlohmann::json::parse(params_str);
+
+        uint64_t chain_id =
+            params.value("chain_id", 42161ULL); // default to Arbitrum
+
+        std::string token_str = params.value(
+            "token_address", "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9");
+        std::array<uint8_t, 20> token_address{};
+        sentinel::events::utils::parse_hex_bytes(token_str, token_address);
+
+        std::string threshold_str =
+            params.value("threshold", "10000000000"); // default 10k USDT
+        std::array<uint8_t, 32> threshold_be =
+            sentinel::events::utils::decimal_to_be_256(threshold_str);
+
+        configs.push_back({.customer_id = customer_id,
+                           .chain_id = chain_id,
+                           .token_address = token_address,
+                           .threshold_be = threshold_be});
+
+        Ldb.info("Loaded large_transfer rule for customer_id: {}", customer_id);
+
+      } catch (const std::exception &e) {
+        Ldb.warn("Failed to parse params_jsonb for customer_id '{}': {}",
+                 customer_id, e.what());
+      }
+    }
+
+    tx.commit();
+  } catch (const std::exception &e) {
+    Ldb.error("Error loading large_transfer configurations: {}", e.what());
+  }
+
+  return configs;
+}
+
+void App::load_customer_map_() {
+  auto &Ldb = sentinel::logger(sentinel::LogComponent::Db);
+
+  try {
+    pqxx::work tx(*conn_);
+    std::string query = "SELECT id, customer_key FROM customers;";
+    pqxx::result res = tx.exec(query);
+
+    for (const auto &row : res) {
+      uint64_t id = row["id"].as<uint64_t>();
+      std::string key = row["customer_key"].as<std::string>();
+      customer_id_to_key_[id] = key;
+    }
+    tx.commit();
+    Ldb.info("Loaded {} customer keys map", customer_id_to_key_.size());
+  } catch (const std::exception &e) {
+    Ldb.error("Error loading customer map: {}", e.what());
+  }
+}
+
+void App::load_token_map_() {
+  // Populate static dummy token symbols (e.g. USDT, USDC)
+  // USDT Arbitrum address: 0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9
+  // (normalized lower)
+  sentinel::risk::TokenKey usdt_arb{
+      42161, "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9"};
+  token_addresses_to_symbols_[usdt_arb] = "USDT";
 }
 
 void App::start_threads_() {

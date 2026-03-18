@@ -140,4 +140,27 @@ inline std::string uint256_be_to_decimal(const uint8_t *data) {
   return result;
 }
 
+// Converts a base-10 string (decimal) to a 32-byte big-endian value.
+inline std::array<uint8_t, 32> decimal_to_be_256(std::string_view decimal) {
+  std::array<uint8_t, 32> result{};
+  for (char c : decimal) {
+    if (c < '0' || c > '9') {
+      throw std::runtime_error("invalid decimal digit");
+    }
+    uint32_t digit = c - '0';
+
+    // result = result * 10 + digit
+    uint32_t carry = digit;
+    for (int i = 31; i >= 0; --i) {
+      uint32_t val = (static_cast<uint32_t>(result[i]) * 10) + carry;
+      result[i] = static_cast<uint8_t>(val & 0xFF);
+      carry = val >> 8;
+    }
+    if (carry > 0) {
+      throw std::runtime_error("decimal string too large for 256-bit int");
+    }
+  }
+  return result;
+}
+
 } // namespace sentinel::events::utils
