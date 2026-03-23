@@ -22,12 +22,13 @@ enum class SignalType : uint8_t {
   LiquidityChange,
   PriceTick,
   PoolSnapshot,
+  Governance, // Minimal placeholder for future governance non-transfer alerts
 
   // Internal signals
   Control
 };
 
-constexpr std::size_t SignalTypeCount = 7;
+constexpr std::size_t SignalTypeCount = 8;
 
 struct SignalMeta {
   uint64_t timestamp_ms;
@@ -63,9 +64,13 @@ struct ControlSignal {
   enum class Command { Stop, Sync } command;
 };
 
+struct GovernanceEvent {
+  // Minimal placeholder; can be expanded when concrete governance rules are added
+};
+
 // Use std::variant, no inheritance
 using SignalPayload = std::variant<std::monostate, EvmLogEvent, PriceTick,
-                                   PoolSnapshot, ControlSignal>;
+                                   PoolSnapshot, GovernanceEvent, ControlSignal>;
 
 struct Signal {
   SignalType type;

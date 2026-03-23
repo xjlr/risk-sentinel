@@ -4,6 +4,7 @@
 #include <condition_variable>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <queue>
 #include <string>
 #include <vector>
@@ -28,9 +29,9 @@ struct Alert {
   std::string rule_type;
   std::string message;
   uint64_t timestamp_ms;
-  std::string amount_decimal;
-  std::string token_address;
-  uint64_t chain_id;
+  std::optional<std::string> amount_decimal;
+  std::optional<std::string> token_address;
+  std::optional<uint64_t> chain_id;
 };
 
 class AlertDispatcher {

@@ -59,9 +59,9 @@ void TelegramAlertChannel::send(const Alert &alert) {
     customer_key = customer_map_->at(alert.customer_id);
   }
 
-  std::string symbol_or_contract = alert.token_address;
-  if (!alert.token_address.empty()) {
-    TokenKey key{alert.chain_id, alert.token_address};
+  std::string symbol_or_contract = alert.token_address.value_or("");
+  if (alert.token_address && !alert.token_address->empty() && alert.chain_id) {
+    TokenKey key{*alert.chain_id, *alert.token_address};
     if (token_map_ && token_map_->contains(key)) {
       symbol_or_contract = token_map_->at(key);
     }
@@ -70,8 +70,8 @@ void TelegramAlertChannel::send(const Alert &alert) {
   std::string text = "[Risk Sentinel Alert]\n";
   text += "Customer: " + customer_key + "\n";
   text += "Message: " + alert.message + "\n";
-  if (!alert.amount_decimal.empty()) {
-    text += "Amount: " + alert.amount_decimal + "\n";
+  if (alert.amount_decimal && !alert.amount_decimal->empty()) {
+    text += "Amount: " + *alert.amount_decimal + "\n";
     text += "Token: " + symbol_or_contract + "\n";
   }
   text += "Time: " + std::to_string(alert.timestamp_ms);
