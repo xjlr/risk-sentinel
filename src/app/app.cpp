@@ -1,5 +1,7 @@
 #include "sentinel/app/app.hpp"
 
+#include <algorithm>
+#include <cctype>
 #include <fstream>
 #include <stdexcept>
 
@@ -180,6 +182,7 @@ void App::init_modules_() {
 
   load_customer_map_();
   load_token_map_();
+  load_governance_configs_();
 
   dispatcher_ = std::make_unique<sentinel::risk::AlertDispatcher>();
   dispatcher_->add_channel(
@@ -273,6 +276,47 @@ App::load_large_transfer_configs_() {
   }
 
   return configs;
+}
+
+void App::load_governance_configs_() {
+  auto &Ldb = sentinel::logger(sentinel::LogComponent::Db);
+
+  try {
+    pqxx::work tx(*conn_);
+
+    std::string query = R"(
+      SELECT customer_id, chain_id, contract_address, enabled
+      FROM customer_governance_rules
+      WHERE enabled = true
+    )";
+
+    pqxx::result res = tx.exec(query);
+    size_t count = 0;
+
+    for (const auto &row : res) {
+      uint64_t customer_id = row["customer_id"].as<uint64_t>();
+      uint64_t chain_id = row["chain_id"].as<uint64_t>();
+      std::string contract_address = row["contract_address"].as<std::string>();
+      bool enabled = row["enabled"].as<bool>();
+
+      std::transform(contract_address.begin(), contract_address.end(),
+                     contract_address.begin(), ::tolower);
+
+      sentinel::risk::GovernanceRuleConfig config{
+          .customer_id = customer_id,
+          .chain_id = chain_id,
+          .contract_address = contract_address,
+          .enabled = enabled};
+
+      sentinel::risk::GovernanceContractKey key{chain_id, contract_address};
+      governance_rules_by_contract_[key].push_back(config);
+      count++;
+    }
+    tx.commit();
+    Ldb.info("Loaded {} governance rules", count);
+  } catch (const std::exception &e) {
+    Ldb.error("Error loading governance configurations: {}", e.what());
+  }
 }
 
 void App::load_customer_map_() {

@@ -12,6 +12,7 @@
 #include "sentinel/chains/arbitrum/ArbitrumAdapter.hpp"
 #include "sentinel/events/EventSource.hpp"
 #include "sentinel/risk/alert_dispatcher.hpp"
+#include "sentinel/risk/governance_config.hpp"
 #include "sentinel/risk/risk_engine.hpp"
 #include "sentinel/risk/rules/large_transfer_rule.hpp"
 #include "sentinel/risk/signal.hpp"
@@ -54,6 +55,7 @@ private:
   void init_modules_();
   std::vector<sentinel::risk::LargeTransferRuleConfig>
   load_large_transfer_configs_();
+  void load_governance_configs_();
   void load_customer_map_();
   void load_token_map_();
   void register_rules_();
@@ -69,6 +71,9 @@ private:
       customer_id_to_key_;
   std::unordered_map<sentinel::risk::TokenKey, std::string>
       token_addresses_to_symbols_;
+  std::unordered_map<sentinel::risk::GovernanceContractKey,
+                     std::vector<sentinel::risk::GovernanceRuleConfig>>
+      governance_rules_by_contract_;
 
   std::atomic<bool> stop_requested_{false};
   std::atomic<bool> stopped_{false};
