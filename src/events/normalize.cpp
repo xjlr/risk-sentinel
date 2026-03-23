@@ -20,6 +20,20 @@ constexpr auto TOPIC_MINT = utils::parse_topic_literal(
 constexpr auto TOPIC_BURN = utils::parse_topic_literal(
     "0xdccd28e36055d506992d9d40a08e08d6691c9569707248066f2c2f82998396e9");
 
+// Governance/Admin Topics
+constexpr auto TOPIC_OWNERSHIP_TRANSFERRED = utils::parse_topic_literal(
+    "0x8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0");
+constexpr auto TOPIC_PAUSED = utils::parse_topic_literal(
+    "0x62e78cea01bee320cd4e420270b5ea74000d11b0c9f74754ebdbfc544b05a258");
+constexpr auto TOPIC_UNPAUSED = utils::parse_topic_literal(
+    "0x5db9ee0a495bf2e6ff9c91a7834c1ba4fdd244a5e8aa4e537bd38aeae4b073aa");
+constexpr auto TOPIC_ROLE_GRANTED = utils::parse_topic_literal(
+    "0x2f8788117e7eff1d82e926ec794901d17c78024a50270940304540a733656f0d");
+constexpr auto TOPIC_ROLE_REVOKED = utils::parse_topic_literal(
+    "0xf6391f5c32d9c69d2a47ea670b442974b53935d1edc7fd64eb21e047a839171b");
+constexpr auto TOPIC_UPGRADED = utils::parse_topic_literal(
+    "0xbc7cd75a20ee27fd9adebab32041f755214dbc6bffa90cc0225b39da2e5c2d3b");
+
 sentinel::risk::SignalType
 classify_topic0(const std::array<uint8_t, 32> &topic0) {
   if (topic0 == TOPIC_TRANSFER)
@@ -32,6 +46,16 @@ classify_topic0(const std::array<uint8_t, 32> &topic0) {
     return sentinel::risk::SignalType::LiquidityChange;
   if (topic0 == TOPIC_BURN)
     return sentinel::risk::SignalType::LiquidityChange;
+  
+  if (topic0 == TOPIC_OWNERSHIP_TRANSFERRED ||
+      topic0 == TOPIC_PAUSED ||
+      topic0 == TOPIC_UNPAUSED ||
+      topic0 == TOPIC_ROLE_GRANTED ||
+      topic0 == TOPIC_ROLE_REVOKED ||
+      topic0 == TOPIC_UPGRADED) {
+    return sentinel::risk::SignalType::Governance;
+  }
+
   return sentinel::risk::SignalType::Unknown;
 }
 
@@ -97,6 +121,29 @@ void normalize(const RawLog &raw, sentinel::risk::Signal &out,
 
   if (evm.topic_count > 0) {
     out.type = classify_topic0(evm.topics[0]);
+
+    if (out.type == sentinel::risk::SignalType::Governance) {
+      sentinel::risk::GovernanceAction action = sentinel::risk::GovernanceAction::Unknown;
+      if (evm.topics[0] == TOPIC_OWNERSHIP_TRANSFERRED) {
+        action = sentinel::risk::GovernanceAction::OwnershipTransferred;
+      } else if (evm.topics[0] == TOPIC_PAUSED) {
+        action = sentinel::risk::GovernanceAction::Paused;
+      } else if (evm.topics[0] == TOPIC_UNPAUSED) {
+        action = sentinel::risk::GovernanceAction::Unpaused;
+      } else if (evm.topics[0] == TOPIC_ROLE_GRANTED) {
+        action = sentinel::risk::GovernanceAction::RoleGranted;
+      } else if (evm.topics[0] == TOPIC_ROLE_REVOKED) {
+        action = sentinel::risk::GovernanceAction::RoleRevoked;
+      } else if (evm.topics[0] == TOPIC_UPGRADED) {
+        action = sentinel::risk::GovernanceAction::Upgraded;
+      }
+      
+      sentinel::risk::GovernanceEvent gov{};
+      gov.action = action;
+      // Emit governance object to pipeline payload
+      out.payload = gov;
+    }
+
   } else {
     out.type = sentinel::risk::SignalType::Unknown;
   }

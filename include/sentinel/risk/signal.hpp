@@ -64,7 +64,18 @@ struct ControlSignal {
   enum class Command { Stop, Sync } command;
 };
 
+enum class GovernanceAction : uint8_t {
+  Unknown,
+  OwnershipTransferred,
+  Paused,
+  Unpaused,
+  RoleGranted,
+  RoleRevoked,
+  Upgraded
+};
+
 struct GovernanceEvent {
+  GovernanceAction action;
   // Minimal placeholder; can be expanded when concrete governance rules are added
 };
 
