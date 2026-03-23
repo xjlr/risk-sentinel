@@ -9,7 +9,7 @@ SELECT id,
        '{
          "chain_id": 42161,
          "token_address": "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
-         "threshold": "1000000"
+         "threshold": "200000000000"
        }'::jsonb
 FROM customers
 WHERE customer_key = 'master_test'

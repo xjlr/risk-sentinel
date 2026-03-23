@@ -128,14 +128,14 @@ ArbitrumAdapter::getLogs(uint64_t from_block, uint64_t to_block) {
   log_.debug("eth_getLogs -> {} logs", arr.size());
 
   // MVP debug; TODO : Remove later
-  if (arr.size() > 0 && arr.size() <= 5) {
-    log_.debug("eth_getLogs sample payload={}", arr.dump());
-  }
+  // if (arr.size() > 0 && arr.size() <= 5) {
+  // log_.debug("eth_getLogs sample payload={}", arr.dump());
+  //}
 
-  if (!arr.empty()) {
-    // A .dump(4) 4 spaces indentation
-    log_.debug("Sample log[0] structure:\n{}", arr[0].dump(4));
-  }
+  // if (!arr.empty()) {
+  //  A .dump(4) 4 spaces indentation
+  // log_.debug("Sample log[0] structure:\n{}", arr[0].dump(4));
+  //}
 
   std::vector<RawLog> out;
   out.reserve(arr.size());
