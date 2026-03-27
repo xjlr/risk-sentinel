@@ -1,17 +1,13 @@
 #include "sentinel/risk/telegram_alert_channel.hpp"
 #include "sentinel/log.hpp"
+#include "sentinel/risk/alert_formatter.hpp"
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
 
 namespace sentinel::risk {
 namespace {
 
-size_t discard_write_cb(char *ptr, size_t size, size_t nmemb,
-                        void *userdata) noexcept {
-  (void)ptr;
-  (void)userdata;
-  return size * nmemb;
-}
+
 
 size_t string_write_cb(char *ptr, size_t size, size_t nmemb,
                        void *userdata) noexcept {
@@ -54,27 +50,7 @@ void TelegramAlertChannel::send(const Alert &alert) {
   std::string url =
       "https://api.telegram.org/bot" + bot_token_ + "/sendMessage";
 
-  std::string customer_key = std::to_string(alert.customer_id);
-  if (customer_map_ && customer_map_->contains(alert.customer_id)) {
-    customer_key = customer_map_->at(alert.customer_id);
-  }
-
-  std::string symbol_or_contract = alert.token_address.value_or("");
-  if (alert.token_address && !alert.token_address->empty() && alert.chain_id) {
-    TokenKey key{*alert.chain_id, *alert.token_address};
-    if (token_map_ && token_map_->contains(key)) {
-      symbol_or_contract = token_map_->at(key);
-    }
-  }
-
-  std::string text = "[Risk Sentinel Alert]\n";
-  text += "Customer: " + customer_key + "\n";
-  text += "Message: " + alert.message + "\n";
-  if (alert.amount_decimal && !alert.amount_decimal->empty()) {
-    text += "Amount: " + *alert.amount_decimal + "\n";
-    text += "Token: " + symbol_or_contract + "\n";
-  }
-  text += "Time: " + std::to_string(alert.timestamp_ms);
+  std::string text = AlertFormatter::format_telegram(alert, customer_map_, token_map_);
 
   nlohmann::json payload;
   payload["chat_id"] = chat_id_;

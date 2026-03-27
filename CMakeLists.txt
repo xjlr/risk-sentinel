@@ -54,6 +54,7 @@ add_library(sentinel_core
   src/events/EventSource.cpp
   src/chains/arbitrum/ArbitrumAdapter.cpp
   src/risk/risk_engine.cpp
+  src/risk/alert_formatter.cpp
   src/risk/alert_dispatcher.cpp
   src/risk/console_alert_channel.cpp
   src/risk/telegram_alert_channel.cpp
