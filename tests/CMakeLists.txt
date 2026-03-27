@@ -10,6 +10,9 @@ add_executable(unit_tests
   test_basic.cpp
   test_model_json.cpp
   test_large_transfer_rule.cpp
+  test_governance_normalize.cpp
+  test_governance_rule.cpp
+  test_alert_formatter.cpp
 )
 
 target_link_libraries(unit_tests PRIVATE
