@@ -11,12 +11,17 @@
 #include <thread>
 #include <vector>
 
+namespace sentinel::metrics {
+struct Metrics;
+}
+
 namespace sentinel::risk {
 
 class RiskEngine {
 public:
   explicit RiskEngine(RingBuffer<Signal> &input_queue,
-                      AlertDispatcher &dispatcher);
+                      AlertDispatcher &dispatcher,
+                      sentinel::metrics::Metrics* metrics = nullptr);
   ~RiskEngine();
 
   // Prevent copy/move
@@ -39,6 +44,7 @@ private:
 
   std::atomic<bool> running_{true};
   std::atomic<bool> finished_{false};
+  sentinel::metrics::Metrics* metrics_;
 };
 
 } // namespace sentinel::risk

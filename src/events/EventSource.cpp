@@ -6,14 +6,16 @@
 
 #include "sentinel/chains/ChainAdapter.hpp"
 #include "sentinel/log.hpp"
+#include "sentinel/metrics/metrics.hpp"
 
 namespace sentinel::events {
 
 EventSource::EventSource(
     ChainAdapter &adapter,
     sentinel::risk::RingBuffer<sentinel::risk::Signal> &out_queue,
-    EventSourceConfig cfg)
-    : adapter_(adapter), out_(out_queue), cfg_(cfg),
+    EventSourceConfig cfg,
+    sentinel::metrics::Metrics *metrics)
+    : adapter_(adapter), out_(out_queue), cfg_(cfg), metrics_(metrics),
       next_block_(cfg.start_block), cold_start_(cfg_.start_block == 0),
       log_(sentinel::logger(sentinel::LogComponent::EventSource)) {
   chain_id_ = adapter_.chainId();
@@ -130,10 +132,24 @@ bool EventSource::poll_once() {
             .count();
   }
 
+  if (metrics_) {
+    metrics_->events_ingested_total.Increment(logs.size());
+  }
+
   for (const RawLog &raw : logs) {
     sentinel::risk::Signal ev{};
     normalize(raw, ev, chain_id_, batch_timestamp_ms);
+    ev.meta.internal_ingress_time_ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch())
+            .count();
+    if (metrics_) {
+      metrics_->signals_normalized_total.Increment();
+    }
     push_blocking(ev);
+    if (metrics_) {
+      metrics_->ring_buffer_depth.Increment();
+    }
   }
 
   // 5) Advance cursor (always based on the requested block range, not on logs)

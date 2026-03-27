@@ -26,6 +26,16 @@ CPMAddPackage(
   VERSION 1.14.1
 )
 
+# prometheus-cpp
+CPMAddPackage(
+  NAME prometheus-cpp
+  GITHUB_REPOSITORY jupp0r/prometheus-cpp
+  VERSION 1.3.0
+  OPTIONS
+    "ENABLE_TESTING OFF"
+    "USE_THIRDPARTY_LIBRARIES ON"
+)
+
 # -------------------------------------------------------------------
 # rigtorp::SPSCQueue (Lock-free Ring Buffer)
 # -------------------------------------------------------------------
@@ -59,6 +69,7 @@ add_library(sentinel_core
   src/risk/console_alert_channel.cpp
   src/risk/telegram_alert_channel.cpp
   src/risk/rules/governance_rule.cpp
+  src/metrics/metrics.cpp
   src/app/app.cpp
 )
 
@@ -80,6 +91,8 @@ target_link_libraries(sentinel_core
   PUBLIC
     nlohmann_json::nlohmann_json
     spdlog::spdlog
+    prometheus-cpp::core
+    prometheus-cpp::pull
   PRIVATE
     CURL::libcurl
     ${PQXX_LIBRARIES}

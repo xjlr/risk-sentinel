@@ -17,6 +17,7 @@
 #include "sentinel/risk/rules/large_transfer_rule.hpp"
 #include "sentinel/risk/signal.hpp"
 #include "sentinel/rpc/JsonRpcClient.hpp"
+#include "sentinel/metrics/metrics.hpp"
 
 namespace pqxx {
 class connection;
@@ -32,6 +33,7 @@ struct AppConfig {
   bool debug = false;
   std::string readiness_file = "/tmp/sentinel.ready";
   std::chrono::milliseconds shutdown_drain_timeout{5000};
+  std::string metrics_listen_address = "0.0.0.0:8080";
 };
 
 class App {
@@ -84,6 +86,7 @@ private:
   std::shared_ptr<pqxx::connection> conn_;
 
   // Modules
+  std::unique_ptr<sentinel::metrics::Metrics> metrics_;
   std::unique_ptr<sentinel::risk::RingBuffer<sentinel::risk::Signal>>
       ring_buffer_;
   std::unique_ptr<JsonRpcClient> rpc_;

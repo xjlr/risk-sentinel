@@ -10,6 +10,7 @@
 #include "sentinel/events/normalize.hpp"
 #include "sentinel/log.hpp"
 #include "sentinel/risk/signal.hpp"
+#include "sentinel/metrics/metrics.hpp"
 
 // Forward declare
 class ChainAdapter;
@@ -30,7 +31,8 @@ class EventSource {
 public:
   EventSource(ChainAdapter &adapter,
               sentinel::risk::RingBuffer<sentinel::risk::Signal> &out_queue,
-              EventSourceConfig cfg);
+              EventSourceConfig cfg,
+              sentinel::metrics::Metrics *metrics = nullptr);
 
   // Thread entry point
   void run(std::stop_token st = {});
@@ -55,6 +57,7 @@ private:
   uint64_t cached_chain_head_ = 0;
 
   spdlog::logger &log_;
+  sentinel::metrics::Metrics *metrics_;
 };
 
 } // namespace sentinel::events

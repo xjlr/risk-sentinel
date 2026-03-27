@@ -1,4 +1,5 @@
 #include "sentinel/rpc/JsonRpcClient.hpp"
+#include "sentinel/metrics/metrics.hpp"
 
 #include <curl/curl.h>
 #include <stdexcept>
@@ -16,8 +17,8 @@ size_t write_callback(char* ptr, size_t size, size_t nmemb, void* userdata) {
 
 } // namespace
 
-JsonRpcClient::JsonRpcClient(std::string endpoint)
-    : endpoint_(std::move(endpoint)) {
+JsonRpcClient::JsonRpcClient(std::string endpoint, sentinel::metrics::Metrics* metrics)
+    : endpoint_(std::move(endpoint)), metrics_(metrics) {
     if (endpoint_.empty()) {
         throw std::runtime_error("JsonRpcClient endpoint is empty");
     }
@@ -72,12 +73,14 @@ nlohmann::json JsonRpcClient::call(
     curl_easy_cleanup(curl);
 
     if (rc != CURLE_OK) {
+        if (metrics_) metrics_->rpc_errors_total.Increment();
         std::ostringstream oss;
         oss << "curl_easy_perform failed: " << curl_easy_strerror(rc);
         throw std::runtime_error(oss.str());
     }
 
     if (http_code != 200) {
+        if (metrics_) metrics_->rpc_errors_total.Increment();
         std::ostringstream oss;
         oss << "JSON-RPC HTTP error: " << http_code
             << ", response=" << response;
@@ -97,14 +100,23 @@ nlohmann::json JsonRpcClient::call(
 
     // --- JSON-RPC error handling ---
     if (json.contains("error")) {
+        if (metrics_) metrics_->rpc_errors_total.Increment();
         throw std::runtime_error(
             "JSON-RPC error: " + json["error"].dump()
         );
     }
 
     if (!json.contains("result")) {
+        if (metrics_) metrics_->rpc_errors_total.Increment();
         throw std::runtime_error(
             "JSON-RPC response missing result field: " + json.dump()
+        );
+    }
+
+    if (metrics_) {
+        metrics_->last_rpc_success_timestamp_seconds.Set(
+            static_cast<double>(std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count())
         );
     }
 

@@ -9,6 +9,10 @@
 #include <string>
 #include <vector>
 
+namespace sentinel::metrics {
+struct Metrics;
+}
+
 namespace sentinel::risk {
 
 class IAlertChannel;
@@ -29,6 +33,7 @@ struct Alert {
   std::string rule_type;
   std::string message;
   uint64_t timestamp_ms;
+  uint64_t internal_ingress_time_ms = 0;
   std::optional<std::string> amount_decimal;
   std::optional<std::string> token_address;
   std::optional<uint64_t> chain_id;
@@ -36,7 +41,7 @@ struct Alert {
 
 class AlertDispatcher {
 public:
-  AlertDispatcher();
+  AlertDispatcher(sentinel::metrics::Metrics* metrics = nullptr);
   ~AlertDispatcher();
 
   // Prevent copy/move
@@ -56,6 +61,7 @@ private:
   std::mutex mutex_;
   std::condition_variable cv_;
   std::atomic<bool> running_{false};
+  sentinel::metrics::Metrics* metrics_;
 };
 
 } // namespace sentinel::risk

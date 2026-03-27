@@ -32,6 +32,7 @@ constexpr std::size_t SignalTypeCount = 8;
 
 struct SignalMeta {
   uint64_t timestamp_ms;
+  uint64_t internal_ingress_time_ms = 0;
   std::optional<uint64_t> block_number;
   std::optional<std::array<uint8_t, 32>> tx_hash;
   bool is_final;

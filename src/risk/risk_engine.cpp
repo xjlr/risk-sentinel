@@ -1,12 +1,14 @@
 #include "sentinel/risk/risk_engine.hpp"
+#include "sentinel/metrics/metrics.hpp"
 
 #include <chrono>
 
 namespace sentinel::risk {
 
 RiskEngine::RiskEngine(RingBuffer<Signal> &input_queue,
-                       AlertDispatcher &dispatcher)
-    : input_queue_(input_queue), dispatcher_(dispatcher) {}
+                       AlertDispatcher &dispatcher,
+                       sentinel::metrics::Metrics* metrics)
+    : input_queue_(input_queue), dispatcher_(dispatcher), metrics_(metrics) {}
 
 RiskEngine::~RiskEngine() { stop(); }
 
@@ -32,6 +34,7 @@ void RiskEngine::run(std::stop_token st) {
     // Read from lock-free queue
     auto *signal_ptr = input_queue_.front();
     if (signal_ptr) {
+      if (metrics_) metrics_->ring_buffer_depth.Decrement();
       // We have a signal, process it!
       Signal signal = std::move(*signal_ptr);
       input_queue_.pop();
@@ -67,6 +70,9 @@ void RiskEngine::run(std::stop_token st) {
       }
 
       // Push alerts to Dispatcher Thread
+      if (metrics_) {
+        metrics_->alerts_generated_total.Increment(alerts.size());
+      }
       for (const auto &alert : alerts) {
         dispatcher_.dispatch(alert);
       }
