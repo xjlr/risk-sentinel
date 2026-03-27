@@ -1,8 +1,10 @@
 #pragma once
 
+#include "signal.hpp"
 #include <cstdint>
-#include <string>
 #include <functional>
+#include <optional>
+#include <string>
 
 namespace sentinel::risk {
 
@@ -11,6 +13,7 @@ struct GovernanceRuleConfig {
   uint64_t chain_id;
   std::string contract_address;
   bool enabled;
+  std::optional<GovernanceAction> action_filter;
 };
 
 struct GovernanceContractKey {
@@ -26,7 +29,8 @@ struct GovernanceContractKey {
 } // namespace sentinel::risk
 
 template <> struct std::hash<sentinel::risk::GovernanceContractKey> {
-  std::size_t operator()(const sentinel::risk::GovernanceContractKey &key) const {
+  std::size_t
+  operator()(const sentinel::risk::GovernanceContractKey &key) const {
     return std::hash<uint64_t>()(key.chain_id) ^
            (std::hash<std::string>()(key.contract_address) << 1);
   }

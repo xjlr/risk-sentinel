@@ -57,6 +57,7 @@ add_library(sentinel_core
   src/risk/alert_dispatcher.cpp
   src/risk/console_alert_channel.cpp
   src/risk/telegram_alert_channel.cpp
+  src/risk/rules/governance_rule.cpp
   src/app/app.cpp
 )
 

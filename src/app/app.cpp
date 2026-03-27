@@ -12,6 +12,7 @@
 #include "sentinel/log.hpp"
 #include "sentinel/risk/console_alert_channel.hpp"
 #include "sentinel/risk/rules/large_transfer_rule.hpp"
+#include "sentinel/risk/rules/governance_rule.hpp"
 #include "sentinel/risk/telegram_alert_channel.hpp"
 #include "sentinel/version.hpp"
 
@@ -215,6 +216,11 @@ void App::register_rules_() {
       std::make_unique<sentinel::risk::LargeTransferRule>(std::move(configs));
   risk_engine_->register_rule(large_transfer_rule.get());
   rules_.push_back(std::move(large_transfer_rule));
+
+  auto governance_rule =
+      std::make_unique<sentinel::risk::GovernanceRule>(governance_rules_by_contract_);
+  risk_engine_->register_rule(governance_rule.get());
+  rules_.push_back(std::move(governance_rule));
 }
 
 std::vector<sentinel::risk::LargeTransferRuleConfig>
@@ -306,7 +312,8 @@ void App::load_governance_configs_() {
           .customer_id = customer_id,
           .chain_id = chain_id,
           .contract_address = contract_address,
-          .enabled = enabled};
+          .enabled = enabled,
+          .action_filter = std::nullopt};
 
       sentinel::risk::GovernanceContractKey key{chain_id, contract_address};
       governance_rules_by_contract_[key].push_back(config);

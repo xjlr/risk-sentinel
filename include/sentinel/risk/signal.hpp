@@ -76,7 +76,8 @@ enum class GovernanceAction : uint8_t {
 
 struct GovernanceEvent {
   GovernanceAction action;
-  // Minimal placeholder; can be expanded when concrete governance rules are added
+  uint64_t chain_id;
+  std::array<uint8_t, 20> contract_address;
 };
 
 // Use std::variant, no inheritance

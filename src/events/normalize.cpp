@@ -9,6 +9,7 @@ namespace sentinel::events {
 
 namespace {
 
+// Transfer
 constexpr auto TOPIC_TRANSFER = utils::parse_topic_literal(
     "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef");
 constexpr auto TOPIC_SWAP_V2 = utils::parse_topic_literal(
@@ -46,13 +47,10 @@ classify_topic0(const std::array<uint8_t, 32> &topic0) {
     return sentinel::risk::SignalType::LiquidityChange;
   if (topic0 == TOPIC_BURN)
     return sentinel::risk::SignalType::LiquidityChange;
-  
-  if (topic0 == TOPIC_OWNERSHIP_TRANSFERRED ||
-      topic0 == TOPIC_PAUSED ||
-      topic0 == TOPIC_UNPAUSED ||
-      topic0 == TOPIC_ROLE_GRANTED ||
-      topic0 == TOPIC_ROLE_REVOKED ||
-      topic0 == TOPIC_UPGRADED) {
+
+  if (topic0 == TOPIC_OWNERSHIP_TRANSFERRED || topic0 == TOPIC_PAUSED ||
+      topic0 == TOPIC_UNPAUSED || topic0 == TOPIC_ROLE_GRANTED ||
+      topic0 == TOPIC_ROLE_REVOKED || topic0 == TOPIC_UPGRADED) {
     return sentinel::risk::SignalType::Governance;
   }
 
@@ -123,7 +121,8 @@ void normalize(const RawLog &raw, sentinel::risk::Signal &out,
     out.type = classify_topic0(evm.topics[0]);
 
     if (out.type == sentinel::risk::SignalType::Governance) {
-      sentinel::risk::GovernanceAction action = sentinel::risk::GovernanceAction::Unknown;
+      sentinel::risk::GovernanceAction action =
+          sentinel::risk::GovernanceAction::Unknown;
       if (evm.topics[0] == TOPIC_OWNERSHIP_TRANSFERRED) {
         action = sentinel::risk::GovernanceAction::OwnershipTransferred;
       } else if (evm.topics[0] == TOPIC_PAUSED) {
@@ -137,9 +136,11 @@ void normalize(const RawLog &raw, sentinel::risk::Signal &out,
       } else if (evm.topics[0] == TOPIC_UPGRADED) {
         action = sentinel::risk::GovernanceAction::Upgraded;
       }
-      
+
       sentinel::risk::GovernanceEvent gov{};
       gov.action = action;
+      gov.chain_id = evm.chain_id;
+      gov.contract_address = evm.address;
       // Emit governance object to pipeline payload
       out.payload = gov;
     }
