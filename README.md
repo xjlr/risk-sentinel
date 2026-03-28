@@ -302,16 +302,106 @@ docker compose down -v
 Configuration is currently provided via environment variables
 (to be replaced by structured config in later stages).
 
+## Monitoring
+
+Risk Sentinel exposes Prometheus-compatible metrics on a `/metrics` endpoint.
+
+### Metrics endpoint
+
+By default, the metrics endpoint is available on the configured Prometheus listen address, for example:
+
+`http://127.0.0.1:8080/metrics`
+
+### Prometheus
+
+Example `prometheus.yml`:
+
+```yaml
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: "risk-sentinel"
+    static_configs:
+      - targets: ["127.0.0.1:8080"]
+```
+
+Start Prometheus with:
+
+```bash
+prometheus --config.file /path/to/prometheus.yml
+```
+
+### Grafana
+
+Grafana can be used to visualize Risk Sentinel metrics.
+
+This repository includes a file-based Grafana provisioning setup so dashboards and datasources can be managed directly from the host filesystem.
+
+Example Docker run:
+
+```bash
+docker run -d \
+  --name grafana \
+  --network host \
+  -e GF_SECURITY_ADMIN_USER=admin \
+  -e GF_SECURITY_ADMIN_PASSWORD=admin \
+  -v "$HOME/dev/risk-sentinel/ops/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources" \
+  -v "$HOME/dev/risk-sentinel/ops/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards" \
+  -v "$HOME/dev/risk-sentinel/ops/grafana/dashboards:/var/lib/grafana/dashboards" \
+  grafana/grafana-oss
+```
+
+With this setup, Grafana datasources and dashboards can be managed directly from:
+
+- `ops/grafana/provisioning/datasources`
+- `ops/grafana/provisioning/dashboards`
+- `ops/grafana/dashboards`
+
+This avoids manual dashboard import and makes the monitoring setup easier to version-control.
+
+### Key metrics
+
+Risk Sentinel currently exports metrics for:
+
+- pipeline throughput
+  - `events_ingested_total`
+  - `signals_normalized_total`
+- alert delivery
+  - `alerts_generated_total`
+  - `alerts_sent_total`
+  - `alerts_send_failures_total`
+- queue health
+  - `ring_buffer_depth`
+  - `alert_queue_depth`
+- liveness / reconnect visibility
+  - `last_rpc_success_timestamp_seconds`
+  - `last_alert_success_timestamp_seconds`
+- latency
+  - `alert_send_duration_seconds`
+  - `signal_to_alert_seconds`
+
 ## Repository structure
+
 
 ```text
 .
-├── src/ # Application entry point
-├── include/ # Shared headers
-├── tests/ # Unit tests
-├── cmake/ # CMake helpers (CPM)
-├── docker/ # Dockerfile
-├── .github/workflows/ # CI configuration
+├── src/                            # Application entry point
+├── include/                        # Shared headers
+├── tests/                          # Unit tests
+├── cmake/                          # CMake helpers (CPM)
+├── docker/                         # Dockerfile
+├── ops/                            # Operational configs and dashboards
+│   ├── prometheus/
+│   │   └── prometheus.yml
+│   └── grafana/
+│       ├── dashboards/
+│       │   └── risk-sentinel-overview.json
+│       └── provisioning/
+│           ├── datasources/
+│           └── dashboards/
+├── .github/workflows/              # CI configuration
 ├── docker-compose.yml
 └── CMakeLists.txt
 ```
