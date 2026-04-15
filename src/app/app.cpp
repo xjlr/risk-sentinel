@@ -176,18 +176,18 @@ void App::init_modules_() {
     throw std::runtime_error("RPC_URL is empty");
   }
 
-  metrics_ = std::make_unique<sentinel::metrics::Metrics>(cfg_.metrics_listen_address);
+  metrics_ = std::make_unique<sentinel::metrics::Metrics>(cfg_.metrics_listen_address, cfg_.chain);
 
-  rpc_ = std::make_unique<JsonRpcClient>(cfg_.rpc_url, metrics_.get());
+  rpc_ = std::make_unique<JsonRpcClient>(cfg_.rpc_url, cfg_.chain, metrics_.get());
   arbitrum_adapter_ = std::make_unique<ArbitrumAdapter>(*rpc_);
   event_source_ = std::make_unique<sentinel::events::EventSource>(
-      *arbitrum_adapter_, *ring_buffer_, cfg_.event_source_cfg, metrics_.get());
+      *arbitrum_adapter_, *ring_buffer_, cfg_.event_source_cfg, cfg_.chain, metrics_.get());
 
   load_customer_map_();
   load_token_map_();
   load_governance_configs_();
 
-  dispatcher_ = std::make_unique<sentinel::risk::AlertDispatcher>(metrics_.get());
+  dispatcher_ = std::make_unique<sentinel::risk::AlertDispatcher>(cfg_.chain, metrics_.get());
   dispatcher_->add_channel(
       std::make_unique<sentinel::risk::ConsoleAlertChannel>());
 
@@ -203,7 +203,7 @@ void App::init_modules_() {
   }
 
   risk_engine_ =
-      std::make_unique<sentinel::risk::RiskEngine>(*ring_buffer_, *dispatcher_, metrics_.get());
+      std::make_unique<sentinel::risk::RiskEngine>(*ring_buffer_, *dispatcher_, cfg_.chain, metrics_.get());
 }
 
 void App::register_rules_() {

@@ -32,6 +32,7 @@ public:
   EventSource(ChainAdapter &adapter,
               sentinel::risk::RingBuffer<sentinel::risk::Signal> &out_queue,
               EventSourceConfig cfg,
+              std::string chain_name,
               sentinel::metrics::Metrics *metrics = nullptr);
 
   // Thread entry point
@@ -47,6 +48,7 @@ private:
 private:
   ChainAdapter &adapter_;
   sentinel::risk::RingBuffer<sentinel::risk::Signal> &out_;
+  std::string chain_name_;
   uint64_t chain_id_;
 
   EventSourceConfig cfg_;
@@ -58,6 +60,13 @@ private:
 
   spdlog::logger &log_;
   sentinel::metrics::Metrics *metrics_;
+
+  // Cached metric references
+  prometheus::Counter* metrics_events_ingested_{nullptr};
+  prometheus::Counter* metrics_signals_normalized_{nullptr};
+  prometheus::Gauge* metrics_ring_buffer_depth_{nullptr};
+  prometheus::Gauge* metrics_last_seen_block_{nullptr};
+  prometheus::Gauge* metrics_last_processed_block_{nullptr};
 };
 
 } // namespace sentinel::events

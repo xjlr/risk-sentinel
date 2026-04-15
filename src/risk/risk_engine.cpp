@@ -7,8 +7,13 @@ namespace sentinel::risk {
 
 RiskEngine::RiskEngine(RingBuffer<Signal> &input_queue,
                        AlertDispatcher &dispatcher,
+                       std::string chain_name,
                        sentinel::metrics::Metrics* metrics)
-    : input_queue_(input_queue), dispatcher_(dispatcher), metrics_(metrics) {}
+    : input_queue_(input_queue), dispatcher_(dispatcher), chain_name_(std::move(chain_name)), metrics_(metrics) {
+    if (metrics_) {
+        ring_buffer_depth_gauge_ = metrics_->ring_buffer_depth_chain;
+    }
+}
 
 RiskEngine::~RiskEngine() { stop(); }
 
@@ -19,6 +24,15 @@ void RiskEngine::register_rule(IRiskRule *rule) {
       routing_table_[i].push_back(rule);
     }
   }
+}
+
+prometheus::Counter* RiskEngine::get_alerts_generated_counter(const std::string& rule_type) {
+    if (!metrics_) return nullptr;
+    auto it = alerts_generated_counters_.find(rule_type);
+    if (it != alerts_generated_counters_.end()) return it->second;
+    auto* counter = &metrics_->alerts_generated_total.Add({{"chain", chain_name_}, {"rule", rule_type}});
+    alerts_generated_counters_[rule_type] = counter;
+    return counter;
 }
 
 void RiskEngine::stop() { running_.store(false, std::memory_order_relaxed); }
@@ -34,7 +48,7 @@ void RiskEngine::run(std::stop_token st) {
     // Read from lock-free queue
     auto *signal_ptr = input_queue_.front();
     if (signal_ptr) {
-      if (metrics_) metrics_->ring_buffer_depth.Decrement();
+      if (ring_buffer_depth_gauge_) ring_buffer_depth_gauge_->Decrement();
       // We have a signal, process it!
       Signal signal = std::move(*signal_ptr);
       input_queue_.pop();
@@ -70,10 +84,8 @@ void RiskEngine::run(std::stop_token st) {
       }
 
       // Push alerts to Dispatcher Thread
-      if (metrics_) {
-        metrics_->alerts_generated_total.Increment(alerts.size());
-      }
       for (const auto &alert : alerts) {
+        if (auto* c = get_alerts_generated_counter(alert.rule_type)) c->Increment();
         dispatcher_.dispatch(alert);
       }
     } else {

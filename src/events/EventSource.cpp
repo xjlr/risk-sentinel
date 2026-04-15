@@ -14,17 +14,25 @@ EventSource::EventSource(
     ChainAdapter &adapter,
     sentinel::risk::RingBuffer<sentinel::risk::Signal> &out_queue,
     EventSourceConfig cfg,
+    std::string chain_name,
     sentinel::metrics::Metrics *metrics)
-    : adapter_(adapter), out_(out_queue), cfg_(cfg), metrics_(metrics),
+    : adapter_(adapter), out_(out_queue), chain_name_(std::move(chain_name)), cfg_(cfg), metrics_(metrics),
       next_block_(cfg.start_block), cold_start_(cfg_.start_block == 0),
       log_(sentinel::logger(sentinel::LogComponent::EventSource)) {
   chain_id_ = adapter_.chainId();
+  if (metrics_) {
+    metrics_events_ingested_ = metrics_->events_ingested_chain;
+    metrics_signals_normalized_ = metrics_->signals_normalized_chain;
+    metrics_ring_buffer_depth_ = metrics_->ring_buffer_depth_chain;
+    metrics_last_seen_block_ = metrics_->last_seen_block_chain;
+    metrics_last_processed_block_ = metrics_->last_processed_block_chain;
+  }
 }
 
 void EventSource::stop() { running_.store(false, std::memory_order_relaxed); }
 
 void EventSource::run(std::stop_token st) {
-  log_.info("EventSource started (chain_id={}, start_block={})", chain_id_,
+  log_.info("EventSource started (chain_name={}, chain_id={}, start_block={})", chain_name_, chain_id_,
             next_block_);
 
   while (running_ && !st.stop_requested()) {
@@ -67,6 +75,9 @@ bool EventSource::poll_once() {
     try {
       cached_chain_head_ = adapter_.latestBlock();
       log_.debug("Chain head updated: {}", cached_chain_head_);
+      if (metrics_last_seen_block_) {
+        metrics_last_seen_block_->Set(cached_chain_head_);
+      }
     } catch (const std::exception &e) {
       throw std::runtime_error(std::string("latestBlock failed: ") + e.what());
     }
@@ -132,8 +143,8 @@ bool EventSource::poll_once() {
             .count();
   }
 
-  if (metrics_) {
-    metrics_->events_ingested_total.Increment(logs.size());
+  if (metrics_events_ingested_) {
+    metrics_events_ingested_->Increment(logs.size());
   }
 
   for (const RawLog &raw : logs) {
@@ -143,17 +154,20 @@ bool EventSource::poll_once() {
         std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now().time_since_epoch())
             .count();
-    if (metrics_) {
-      metrics_->signals_normalized_total.Increment();
+    if (metrics_signals_normalized_) {
+      metrics_signals_normalized_->Increment();
     }
     push_blocking(ev);
-    if (metrics_) {
-      metrics_->ring_buffer_depth.Increment();
+    if (metrics_ring_buffer_depth_) {
+      metrics_ring_buffer_depth_->Increment();
     }
   }
 
   // 5) Advance cursor (always based on the requested block range, not on logs)
   next_block_ = to_block + 1;
+  if (metrics_last_processed_block_) {
+    metrics_last_processed_block_->Set(to_block);
+  }
 
   // 6) Tell run() whether it should continue immediately (still behind head)
   return (next_block_ <= cached_chain_head_);

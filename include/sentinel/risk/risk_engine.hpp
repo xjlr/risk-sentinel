@@ -9,10 +9,16 @@
 #include <condition_variable>
 #include <mutex>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 namespace sentinel::metrics {
 struct Metrics;
+}
+
+namespace prometheus {
+class Counter;
+class Gauge;
 }
 
 namespace sentinel::risk {
@@ -21,6 +27,7 @@ class RiskEngine {
 public:
   explicit RiskEngine(RingBuffer<Signal> &input_queue,
                       AlertDispatcher &dispatcher,
+                      std::string chain_name,
                       sentinel::metrics::Metrics* metrics = nullptr);
   ~RiskEngine();
 
@@ -44,7 +51,13 @@ private:
 
   std::atomic<bool> running_{true};
   std::atomic<bool> finished_{false};
+  std::string chain_name_;
   sentinel::metrics::Metrics* metrics_;
+  prometheus::Gauge* ring_buffer_depth_gauge_ = nullptr;
+  
+  std::unordered_map<std::string, prometheus::Counter*> alerts_generated_counters_;
+
+  prometheus::Counter* get_alerts_generated_counter(const std::string& rule_type);
 };
 
 } // namespace sentinel::risk

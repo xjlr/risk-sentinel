@@ -1,7 +1,7 @@
 #pragma once
+#include <string>
 
 #include "sentinel/risk/alert_channel.hpp"
-#include <string>
 #include <unordered_map>
 
 namespace sentinel::risk {
@@ -15,6 +15,7 @@ public:
   ~TelegramAlertChannel() override;
 
   void send(const Alert &alert) override;
+  std::string name() const override { return "telegram"; }
 
 private:
   std::string bot_token_;
