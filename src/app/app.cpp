@@ -15,6 +15,7 @@
 #include "sentinel/risk/rules/governance_rule.hpp"
 #include "sentinel/risk/telegram_alert_channel.hpp"
 #include "sentinel/version.hpp"
+#include "sentinel/risk/rules/mint_burn_rule.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -186,6 +187,7 @@ void App::init_modules_() {
   load_customer_map_();
   load_token_map_();
   load_governance_configs_();
+  load_mint_burn_configs_();
 
   dispatcher_ = std::make_unique<sentinel::risk::AlertDispatcher>(cfg_.chain, metrics_.get());
   dispatcher_->add_channel(
@@ -223,6 +225,12 @@ void App::register_rules_() {
       std::make_unique<sentinel::risk::GovernanceRule>(governance_rules_by_contract_);
   risk_engine_->register_rule(governance_rule.get());
   rules_.push_back(std::move(governance_rule));
+
+  auto mint_burn_rule =
+      std::make_unique<sentinel::risk::MintBurnRule>(
+          mint_burn_rules_by_contract_);
+  risk_engine_->register_rule(mint_burn_rule.get());
+  rules_.push_back(std::move(mint_burn_rule));
 }
 
 std::vector<sentinel::risk::LargeTransferRuleConfig>
@@ -325,6 +333,56 @@ void App::load_governance_configs_() {
     Ldb.info("Loaded {} governance rules", count);
   } catch (const std::exception &e) {
     Ldb.error("Error loading governance configurations: {}", e.what());
+  }
+}
+
+void App::load_mint_burn_configs_() {
+  auto &Ldb = sentinel::logger(sentinel::LogComponent::Db);
+
+  try {
+    pqxx::work tx(*conn_);
+
+    std::string query = R"(
+      SELECT customer_id, chain_id, contract_address, mint_threshold_raw, burn_threshold_raw, enabled
+      FROM customer_mint_burn_rules
+      WHERE enabled = true
+    )";
+
+    pqxx::result res = tx.exec(query);
+    size_t count = 0;
+
+    for (const auto &row : res) {
+      uint64_t customer_id = row["customer_id"].as<uint64_t>();
+      uint64_t chain_id = row["chain_id"].as<uint64_t>();
+      std::string contract_address = row["contract_address"].as<std::string>();
+      std::string mint_threshold_raw = row["mint_threshold_raw"].as<std::string>();
+      std::string burn_threshold_raw = row["burn_threshold_raw"].as<std::string>();
+      bool enabled = row["enabled"].as<bool>();
+
+      std::transform(contract_address.begin(), contract_address.end(),
+                     contract_address.begin(), ::tolower);
+
+      std::array<uint8_t, 32> mint_threshold_be =
+          sentinel::events::utils::decimal_to_be_256(mint_threshold_raw);
+      std::array<uint8_t, 32> burn_threshold_be =
+          sentinel::events::utils::decimal_to_be_256(burn_threshold_raw);
+
+      sentinel::risk::MintBurnRuleConfig config{
+          .customer_id = customer_id,
+          .chain_id = chain_id,
+          .contract_address = contract_address,
+          .mint_threshold_be = mint_threshold_be,
+          .burn_threshold_be = burn_threshold_be,
+          .enabled = enabled};
+
+      sentinel::risk::MintBurnContractKey key{chain_id, contract_address};
+      mint_burn_rules_by_contract_[key].push_back(config);
+      count++;
+    }
+    tx.commit();
+    Ldb.info("Loaded {} mint_burn rules", count);
+  } catch (const std::exception &e) {
+    Ldb.error("Error loading mint_burn configurations: {}", e.what());
   }
 }
 

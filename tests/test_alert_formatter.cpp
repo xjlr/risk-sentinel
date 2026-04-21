@@ -103,4 +103,24 @@ TEST_CASE("Alert Formatter Testing") {
     REQUIRE(text.find("[Amount: 100.0]") != std::string::npos);
     REQUIRE(text.find("[Token: 0x2222222222222222222222222222222222222222]") != std::string::npos);
   }
+
+  SECTION("Mint/Burn formatting includes Mint/Burn details in Telegram") {
+    Alert a;
+    a.customer_id = 1;
+    a.rule_type = "mint_burn";
+    a.timestamp_ms = 50000;
+    a.chain_id = 1;
+    a.token_address = "0x1111111111111111111111111111111111111111";
+    a.message = "Large Mint detected";
+    a.amount_decimal = "1234.56";
+
+    std::string text = formatter.format_telegram(a, &customer_map, &token_map);
+
+    REQUIRE(text.find("Customer: Customer One") != std::string::npos);
+    REQUIRE(text.find("Type: Mint/Burn") != std::string::npos);
+    REQUIRE(text.find("Message: Large Mint detected") != std::string::npos);
+    REQUIRE(text.find("Chain ID: 1") != std::string::npos);
+    REQUIRE(text.find("Amount: 1234.56") != std::string::npos);
+    REQUIRE(text.find("Token: USDC (0x1111111111111111111111111111111111111111)") != std::string::npos);
+  }
 }

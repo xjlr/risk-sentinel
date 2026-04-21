@@ -143,6 +143,31 @@ void normalize(const RawLog &raw, sentinel::risk::Signal &out,
       gov.contract_address = evm.address;
       // Emit governance object to pipeline payload
       out.payload = gov;
+    } else if (out.type == sentinel::risk::SignalType::Transfer && evm.topic_count >= 3) {
+      bool is_mint = std::all_of(evm.topics[1].begin(), evm.topics[1].end(), [](uint8_t b) { return b == 0; });
+      bool is_burn = std::all_of(evm.topics[2].begin(), evm.topics[2].end(), [](uint8_t b) { return b == 0; });
+
+      if ((is_mint || is_burn) && evm.data_size >= 32) {
+        out.type = sentinel::risk::SignalType::MintBurn;
+        sentinel::risk::MintBurnEvent mb{};
+        
+        if (is_mint && is_burn) {
+          mb.direction = sentinel::risk::MintBurnDirection::Unknown;
+        } else if (is_mint) {
+          mb.direction = sentinel::risk::MintBurnDirection::Mint;
+        } else {
+          mb.direction = sentinel::risk::MintBurnDirection::Burn;
+        }
+        
+        mb.chain_id = evm.chain_id;
+        mb.token_address = evm.address;
+        
+        std::copy_n(evm.data.begin(), 32, mb.amount.begin());
+        std::copy_n(evm.topics[1].end() - 20, 20, mb.from.begin());
+        std::copy_n(evm.topics[2].end() - 20, 20, mb.to.begin());
+        
+        out.payload = mb;
+      }
     }
 
   } else {

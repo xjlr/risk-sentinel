@@ -18,6 +18,25 @@ std::string AlertFormatter::format_telegram(
   if (alert.rule_type == "governance") {
     text += "Type: Governance\n";
     text += "Message: " + alert.message + "\n";
+  } else if (alert.rule_type == "mint_burn") {
+    text += "Type: Mint/Burn\n";
+    text += "Message: " + alert.message + "\n";
+    if (alert.chain_id) {
+      text += "Chain ID: " + std::to_string(*alert.chain_id) + "\n";
+    }
+    if (alert.amount_decimal && !alert.amount_decimal->empty()) {
+      text += "Amount: " + *alert.amount_decimal + "\n";
+    }
+    if (alert.token_address && !alert.token_address->empty()) {
+      std::string symbol_or_contract = *alert.token_address;
+      if (alert.chain_id) {
+        TokenKey key{*alert.chain_id, *alert.token_address};
+        if (token_map && token_map->contains(key)) {
+          symbol_or_contract = token_map->at(key) + " (" + *alert.token_address + ")";
+        }
+      }
+      text += "Token: " + symbol_or_contract + "\n";
+    }
   } else {
     text += "Message: " + alert.message + "\n";
     if (alert.amount_decimal && !alert.amount_decimal->empty()) {

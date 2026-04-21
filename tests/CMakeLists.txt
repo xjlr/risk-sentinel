@@ -13,6 +13,9 @@ add_executable(unit_tests
   test_governance_normalize.cpp
   test_governance_rule.cpp
   test_alert_formatter.cpp
+  test_mint_burn_normalize.cpp
+  test_mint_burn_rule.cpp
+  test_regression_existing_flows.cpp
 )
 
 target_link_libraries(unit_tests PRIVATE
