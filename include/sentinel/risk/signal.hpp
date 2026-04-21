@@ -19,6 +19,7 @@ enum class SignalType : uint8_t {
   // On-chain events
   Swap,
   Transfer,
+  MintBurn,
   LiquidityChange,
   PriceTick,
   PoolSnapshot,
@@ -28,7 +29,7 @@ enum class SignalType : uint8_t {
   Control
 };
 
-constexpr std::size_t SignalTypeCount = 8;
+constexpr std::size_t SignalTypeCount = 9;
 
 struct SignalMeta {
   uint64_t timestamp_ms;
@@ -81,9 +82,25 @@ struct GovernanceEvent {
   std::array<uint8_t, 20> contract_address;
 };
 
+enum class MintBurnDirection : uint8_t {
+  Unknown,
+  Mint,
+  Burn
+};
+
+struct MintBurnEvent {
+  MintBurnDirection direction;
+  uint64_t chain_id;
+  std::array<uint8_t, 20> token_address;
+  std::array<uint8_t, 32> amount;
+  std::array<uint8_t, 20> from;
+  std::array<uint8_t, 20> to;
+};
+
 // Use std::variant, no inheritance
 using SignalPayload = std::variant<std::monostate, EvmLogEvent, PriceTick,
-                                   PoolSnapshot, GovernanceEvent, ControlSignal>;
+                                   PoolSnapshot, GovernanceEvent, ControlSignal,
+                                   MintBurnEvent>;
 
 struct Signal {
   SignalType type;
