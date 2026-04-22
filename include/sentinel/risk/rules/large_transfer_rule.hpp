@@ -28,6 +28,8 @@ public:
     return make_mask(SignalType::Transfer);
   }
 
+  std::string_view rule_type_name() const override { return "large_transfer"; }
+
   void evaluate(const Signal &signal, StateStore & /* state_store */,
                 std::vector<Alert> &out) override {
     const auto *evm = std::get_if<EvmLogEvent>(&signal.payload);

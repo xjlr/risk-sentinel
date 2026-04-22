@@ -37,6 +37,8 @@ SignalMask GovernanceRule::interests() const {
   return make_mask(SignalType::Governance);
 }
 
+std::string_view GovernanceRule::rule_type_name() const { return "governance"; }
+
 void GovernanceRule::evaluate(const Signal &signal,
                               StateStore & /* state_store */,
                               std::vector<Alert> &out) {

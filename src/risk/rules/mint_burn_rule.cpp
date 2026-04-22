@@ -14,6 +14,8 @@ SignalMask MintBurnRule::interests() const {
   return make_mask(SignalType::MintBurn);
 }
 
+std::string_view MintBurnRule::rule_type_name() const { return "mint_burn"; }
+
 void MintBurnRule::evaluate(const Signal &signal, StateStore & /* state_store */,
                             std::vector<Alert> &out) {
   if (signal.type != SignalType::MintBurn) {

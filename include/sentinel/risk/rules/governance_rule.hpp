@@ -16,6 +16,7 @@ public:
                                std::vector<GovernanceRuleConfig>> &config_map);
 
   SignalMask interests() const override;
+  std::string_view rule_type_name() const override;
 
   void evaluate(const Signal &signal, StateStore &state_store,
                 std::vector<Alert> &out) override;

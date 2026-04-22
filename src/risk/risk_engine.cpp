@@ -24,15 +24,13 @@ void RiskEngine::register_rule(IRiskRule *rule) {
       routing_table_[i].push_back(rule);
     }
   }
-}
-
-prometheus::Counter* RiskEngine::get_alerts_generated_counter(const std::string& rule_type) {
-    if (!metrics_) return nullptr;
-    auto it = alerts_generated_counters_.find(rule_type);
-    if (it != alerts_generated_counters_.end()) return it->second;
-    auto* counter = &metrics_->alerts_generated_total.Add({{"chain", chain_name_}, {"rule", rule_type}});
-    alerts_generated_counters_[rule_type] = counter;
-    return counter;
+  if (metrics_) {
+    std::string type_name{rule->rule_type_name()};
+    if (alerts_generated_counters_.find(type_name) == alerts_generated_counters_.end()) {
+      alerts_generated_counters_[type_name] =
+          &metrics_->alerts_generated_total.Add({{"chain", chain_name_}, {"rule", type_name}});
+    }
+  }
 }
 
 void RiskEngine::stop() { running_.store(false, std::memory_order_relaxed); }
@@ -85,7 +83,8 @@ void RiskEngine::run(std::stop_token st) {
 
       // Push alerts to Dispatcher Thread
       for (const auto &alert : alerts) {
-        if (auto* c = get_alerts_generated_counter(alert.rule_type)) c->Increment();
+        auto it = alerts_generated_counters_.find(alert.rule_type);
+        if (it != alerts_generated_counters_.end()) it->second->Increment();
         dispatcher_.dispatch(alert);
       }
     } else {

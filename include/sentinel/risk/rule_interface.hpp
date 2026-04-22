@@ -1,6 +1,7 @@
 #pragma once
 
 #include "signal.hpp"
+#include <string_view>
 #include <vector>
 
 namespace sentinel::risk {
@@ -14,6 +15,7 @@ public:
     virtual ~IRiskRule() = default;
 
     virtual SignalMask interests() const = 0;
+    virtual std::string_view rule_type_name() const = 0;
 
     virtual void evaluate(
         const Signal& signal,

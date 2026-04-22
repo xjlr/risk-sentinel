@@ -3,7 +3,6 @@
 #include <nlohmann/json.hpp>
 #include <string>
 
-#include <mutex>
 #include <unordered_map>
 
 namespace sentinel::metrics {
@@ -30,10 +29,6 @@ private:
     std::string chain_name_;
     sentinel::metrics::Metrics* metrics_;
 
-    prometheus::Counter* get_rpc_counter(const std::string& method, const std::string& status);
-    prometheus::Histogram* get_rpc_histogram(const std::string& method);
-
-    std::mutex metrics_mutex_;
     prometheus::Gauge* last_rpc_success_gauge_ = nullptr;
     std::unordered_map<std::string, prometheus::Counter*> rpc_counters_;
     std::unordered_map<std::string, prometheus::Histogram*> rpc_histograms_;

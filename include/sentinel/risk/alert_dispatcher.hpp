@@ -79,8 +79,6 @@ private:
   prometheus::Histogram* alert_send_duration_hist_ = nullptr;
   prometheus::Histogram* signal_to_alert_hist_ = nullptr;
 
-  prometheus::Counter* get_alerts_sent_counter(const std::string& channel);
-  prometheus::Counter* get_alerts_send_failures_counter(const std::string& channel);
 };
 
 } // namespace sentinel::risk

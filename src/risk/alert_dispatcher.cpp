@@ -24,26 +24,15 @@ AlertDispatcher::~AlertDispatcher() { stop(); }
 void AlertDispatcher::add_channel(std::unique_ptr<IAlertChannel> channel) {
   assert(!running_.load(std::memory_order_relaxed));
   if (channel) {
+    if (metrics_) {
+      const std::string ch_name = channel->name();
+      alerts_sent_counters_[ch_name] =
+          &metrics_->alerts_sent_total.Add({{"chain", chain_name_}, {"channel", ch_name}});
+      alerts_send_failures_counters_[ch_name] =
+          &metrics_->alerts_send_failures_total.Add({{"chain", chain_name_}, {"channel", ch_name}});
+    }
     channels_.push_back(std::move(channel));
   }
-}
-
-prometheus::Counter* AlertDispatcher::get_alerts_sent_counter(const std::string& channel) {
-    if (!metrics_) return nullptr;
-    auto it = alerts_sent_counters_.find(channel);
-    if (it != alerts_sent_counters_.end()) return it->second;
-    auto* counter = &metrics_->alerts_sent_total.Add({{"chain", chain_name_}, {"channel", channel}});
-    alerts_sent_counters_[channel] = counter;
-    return counter;
-}
-
-prometheus::Counter* AlertDispatcher::get_alerts_send_failures_counter(const std::string& channel) {
-    if (!metrics_) return nullptr;
-    auto it = alerts_send_failures_counters_.find(channel);
-    if (it != alerts_send_failures_counters_.end()) return it->second;
-    auto* counter = &metrics_->alerts_send_failures_total.Add({{"chain", chain_name_}, {"channel", channel}});
-    alerts_send_failures_counters_[channel] = counter;
-    return counter;
 }
 
 void AlertDispatcher::stop() {
@@ -93,13 +82,16 @@ void AlertDispatcher::run(std::stop_token st) {
         try {
           channel->send(alert);
           any_success = true;
-          if (auto* c = get_alerts_sent_counter(channel->name())) c->Increment();
+          auto it = alerts_sent_counters_.find(channel->name());
+          if (it != alerts_sent_counters_.end()) it->second->Increment();
         } catch (const std::exception &e) {
-          if (auto* c = get_alerts_send_failures_counter(channel->name())) c->Increment();
+          auto it = alerts_send_failures_counters_.find(channel->name());
+          if (it != alerts_send_failures_counters_.end()) it->second->Increment();
           sentinel::logger(sentinel::LogComponent::Alert)
               .error("Exception in alert channel send: {}", e.what());
         } catch (...) {
-          if (auto* c = get_alerts_send_failures_counter(channel->name())) c->Increment();
+          auto it = alerts_send_failures_counters_.find(channel->name());
+          if (it != alerts_send_failures_counters_.end()) it->second->Increment();
           sentinel::logger(sentinel::LogComponent::Alert)
               .error("Unknown exception in alert channel send");
         }

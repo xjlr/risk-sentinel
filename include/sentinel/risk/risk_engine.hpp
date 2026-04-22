@@ -56,8 +56,6 @@ private:
   prometheus::Gauge* ring_buffer_depth_gauge_ = nullptr;
   
   std::unordered_map<std::string, prometheus::Counter*> alerts_generated_counters_;
-
-  prometheus::Counter* get_alerts_generated_counter(const std::string& rule_type);
 };
 
 } // namespace sentinel::risk
