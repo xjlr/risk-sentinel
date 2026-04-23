@@ -34,6 +34,8 @@ constexpr auto TOPIC_ROLE_REVOKED = utils::parse_topic_literal(
     "0xf6391f5c32d9c69d2a47ea670b442974b53935d1edc7fd64eb21e047a839171b");
 constexpr auto TOPIC_UPGRADED = utils::parse_topic_literal(
     "0xbc7cd75a20ee27fd9adebab32041f755214dbc6bffa90cc0225b39da2e5c2d3b");
+constexpr auto TOPIC_APPROVAL = utils::parse_topic_literal(
+    "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925");
 
 sentinel::risk::SignalType
 classify_topic0(const std::array<uint8_t, 32> &topic0) {
@@ -53,6 +55,9 @@ classify_topic0(const std::array<uint8_t, 32> &topic0) {
       topic0 == TOPIC_ROLE_REVOKED || topic0 == TOPIC_UPGRADED) {
     return sentinel::risk::SignalType::Governance;
   }
+
+  if (topic0 == TOPIC_APPROVAL)
+      return sentinel::risk::SignalType::Approval;
 
   return sentinel::risk::SignalType::Unknown;
 }

@@ -15,6 +15,8 @@ add_executable(unit_tests
   test_alert_formatter.cpp
   test_mint_burn_normalize.cpp
   test_mint_burn_rule.cpp
+  test_approval_normalize.cpp
+  test_approval_rule.cpp
   test_regression_existing_flows.cpp
 )
 

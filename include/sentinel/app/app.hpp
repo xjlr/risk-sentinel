@@ -12,6 +12,7 @@
 #include "sentinel/chains/arbitrum/ArbitrumAdapter.hpp"
 #include "sentinel/events/EventSource.hpp"
 #include "sentinel/risk/alert_dispatcher.hpp"
+#include "sentinel/risk/approval_config.hpp"
 #include "sentinel/risk/governance_config.hpp"
 #include "sentinel/risk/mint_burn_config.hpp"
 #include "sentinel/risk/risk_engine.hpp"
@@ -60,6 +61,7 @@ private:
   load_large_transfer_configs_();
   void load_governance_configs_();
   void load_mint_burn_configs_();
+  void load_approval_configs_();
   void load_customer_map_();
   void load_token_map_();
   void register_rules_();
@@ -81,6 +83,9 @@ private:
   std::unordered_map<sentinel::risk::MintBurnContractKey,
                      std::vector<sentinel::risk::MintBurnRuleConfig>>
       mint_burn_rules_by_contract_;
+  std::unordered_map<sentinel::risk::ApprovalContractKey,
+                     std::vector<sentinel::risk::ApprovalRuleConfig>>
+      approval_rules_by_contract_;
 
   std::atomic<bool> stop_requested_{false};
   std::atomic<bool> stopped_{false};

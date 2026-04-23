@@ -70,6 +70,7 @@ add_library(sentinel_core
   src/risk/telegram_alert_channel.cpp
   src/risk/rules/governance_rule.cpp
   src/risk/rules/mint_burn_rule.cpp
+  src/risk/rules/approval_rule.cpp
   src/metrics/metrics.cpp
   src/app/app.cpp
 )

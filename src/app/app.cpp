@@ -15,6 +15,7 @@
 #include "sentinel/risk/rules/governance_rule.hpp"
 #include "sentinel/risk/telegram_alert_channel.hpp"
 #include "sentinel/version.hpp"
+#include "sentinel/risk/rules/approval_rule.hpp"
 #include "sentinel/risk/rules/mint_burn_rule.hpp"
 
 #include <nlohmann/json.hpp>
@@ -188,6 +189,7 @@ void App::init_modules_() {
   load_token_map_();
   load_governance_configs_();
   load_mint_burn_configs_();
+  load_approval_configs_();
 
   dispatcher_ = std::make_unique<sentinel::risk::AlertDispatcher>(cfg_.chain, metrics_.get());
   dispatcher_->add_channel(
@@ -231,6 +233,11 @@ void App::register_rules_() {
           mint_burn_rules_by_contract_);
   risk_engine_->register_rule(mint_burn_rule.get());
   rules_.push_back(std::move(mint_burn_rule));
+
+  auto approval_rule =
+      std::make_unique<sentinel::risk::ApprovalRule>(approval_rules_by_contract_);
+  risk_engine_->register_rule(approval_rule.get());
+  rules_.push_back(std::move(approval_rule));
 }
 
 std::vector<sentinel::risk::LargeTransferRuleConfig>
@@ -383,6 +390,53 @@ void App::load_mint_burn_configs_() {
     Ldb.info("Loaded {} mint_burn rules", count);
   } catch (const std::exception &e) {
     Ldb.error("Error loading mint_burn configurations: {}", e.what());
+  }
+}
+
+void App::load_approval_configs_() {
+  auto &Ldb = sentinel::logger(sentinel::LogComponent::Db);
+
+  try {
+    pqxx::work tx(*conn_);
+
+    std::string query = R"(
+      SELECT customer_id, chain_id, token_address, threshold_raw, alert_on_infinite, enabled
+      FROM customer_approval_rules
+      WHERE enabled = true
+    )";
+
+    pqxx::result res = tx.exec(query);
+    size_t count = 0;
+
+    for (const auto &row : res) {
+      uint64_t customer_id = row["customer_id"].as<uint64_t>();
+      uint64_t chain_id = row["chain_id"].as<uint64_t>();
+      std::string token_address = row["token_address"].as<std::string>();
+      std::string threshold_raw = row["threshold_raw"].as<std::string>();
+      bool alert_on_infinite = row["alert_on_infinite"].as<bool>();
+      bool enabled = row["enabled"].as<bool>();
+
+      std::transform(token_address.begin(), token_address.end(),
+                     token_address.begin(), ::tolower);
+
+      sentinel::risk::ApprovalRuleConfig config{};
+      config.customer_id = customer_id;
+      config.chain_id = chain_id;
+      config.alert_on_infinite = alert_on_infinite;
+      config.enabled = enabled;
+
+      sentinel::events::utils::parse_hex_bytes(token_address, config.token_address);
+      config.threshold_be =
+          sentinel::events::utils::decimal_to_be_256(threshold_raw);
+
+      sentinel::risk::ApprovalContractKey key{chain_id, token_address};
+      approval_rules_by_contract_[key].push_back(config);
+      count++;
+    }
+    tx.commit();
+    Ldb.info("Loaded {} approval rules", count);
+  } catch (const std::exception &e) {
+    Ldb.error("Error loading approval configurations: {}", e.what());
   }
 }
 

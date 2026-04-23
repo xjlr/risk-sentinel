@@ -24,12 +24,13 @@ enum class SignalType : uint8_t {
   PriceTick,
   PoolSnapshot,
   Governance, // Minimal placeholder for future governance non-transfer alerts
+  Approval,
 
   // Internal signals
   Control
 };
 
-constexpr std::size_t SignalTypeCount = 9;
+constexpr std::size_t SignalTypeCount = 10;
 
 struct SignalMeta {
   uint64_t timestamp_ms;
