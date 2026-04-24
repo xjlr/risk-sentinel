@@ -241,6 +241,40 @@ docker run -d \
   grafana/grafana-oss
 ```
 
+## Health Checks
+
+Risk Sentinel exposes two HTTP endpoints for orchestrator health probes:
+
+| Endpoint | Purpose | On failure, the orchestrator should |
+|---|---|---|
+| `GET /healthz` | Liveness — is the process alive? | Restart the container |
+| `GET /readyz`  | Readiness — can we serve traffic? | Stop routing traffic (no restart) |
+
+Default listen address: `0.0.0.0:8081` (configurable via `HEALTH_LISTEN_ADDRESS`). This is a separate port from the Prometheus metrics endpoint (port 8080).
+
+**/healthz** returns `200 OK` with body `OK`.
+
+**/readyz** returns a JSON report of all checks:
+
+```json
+{
+  "ready": true,
+  "checks": {
+    "threads_alive":        { "ok": true, "detail": "" },
+    "heartbeats_recorded":  { "ok": true, "detail": "" },
+    "db_connected":         { "ok": true, "detail": "" },
+    "rpc_recent":           { "ok": true, "detail": "" }
+  }
+}
+```
+
+Readiness fails (503) if:
+- Any of the three pipeline threads (EventSource, RiskEngine, AlertDispatcher) has not recorded a heartbeat in the last 5 seconds — indicates a stuck or deadlocked thread.
+- The PostgreSQL `SELECT 1` probe fails.
+- No successful RPC call in the last 2 minutes.
+
+During startup, before the first RPC call succeeds, `rpc_recent` reports `ok=true` with detail `no RPC calls yet` to avoid false-negative startup flapping.
+
 ## Webhook Integration
 
 The webhook channel delivers a signed HTTPS POST to one or more customer-supplied URLs whenever an alert fires for that customer. Each customer can have multiple endpoints; all receive the same payload independently (fan-out, not failover).
@@ -436,6 +470,7 @@ ln -s build/dev/compile_commands.json compile_commands.json
 | `TELEGRAM_CHAT_ID` | No | — | Telegram chat ID to deliver alerts to |
 | `LOG_LEVEL` | No | `info` | Set to `debug` for verbose output |
 | `DEBUG` | No | `false` | Alias for `LOG_LEVEL=debug`; accepts `1`, `true`, `yes`, `on` |
+| `HEALTH_LISTEN_ADDRESS` | No | `0.0.0.0:8081` | Bind address for `/healthz` and `/readyz` endpoints |
 
 Create a `.env` file for local development:
 

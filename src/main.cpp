@@ -39,6 +39,7 @@ int main(int argc, char **argv) {
   cfg.chain = getenv_or("CHAIN", "arbitrum");
   cfg.database_url = getenv_or("DATABASE_URL", "");
   cfg.rpc_url = getenv_or("ARBITRUM_RPC_URL", "");
+  cfg.health_listen_address = getenv_or("HEALTH_LISTEN_ADDRESS", "0.0.0.0:8081");
 
   const std::string log_level = getenv_or("LOG_LEVEL", "info");
   cfg.debug = (log_level == "debug") || env_is_true("DEBUG");

@@ -45,6 +45,13 @@ CPMAddPackage(
   GIT_TAG master
 )
 
+# cpp-httplib (single-header HTTP server/client used by health endpoints)
+CPMAddPackage(
+  NAME cpp-httplib
+  GITHUB_REPOSITORY yhirose/cpp-httplib
+  VERSION 0.18.1
+)
+
 # libcurl
 find_package(CURL REQUIRED)
 
@@ -80,6 +87,8 @@ add_library(sentinel_core
   src/risk/webhook_alert_channel.cpp
   src/security/crypto.cpp
   src/admin/encrypt_secret.cpp
+  src/health/health_checks.cpp
+  src/health/health_server.cpp
 )
 
 
@@ -102,6 +111,7 @@ target_link_libraries(sentinel_core
     spdlog::spdlog
     prometheus-cpp::core
     prometheus-cpp::pull
+    httplib::httplib
   PRIVATE
     CURL::libcurl
     OpenSSL::Crypto

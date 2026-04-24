@@ -21,6 +21,7 @@ add_executable(unit_tests
   test_crypto.cpp
   test_webhook_alert_channel.cpp
   test_alert_deduplicator.cpp
+  test_health_checks.cpp
 )
 
 target_link_libraries(unit_tests PRIVATE

@@ -11,9 +11,11 @@ namespace sentinel::risk {
 AlertDispatcher::AlertDispatcher(std::string chain_name,
                                  sentinel::metrics::Metrics* metrics,
                                  DeduplicatorConfig dedup_cfg,
-                                 std::vector<std::string> rule_types)
+                                 std::vector<std::string> rule_types,
+                                 sentinel::health::Heartbeat* heartbeat)
     : chain_name_(std::move(chain_name)),
       metrics_(metrics),
+      heartbeat_(heartbeat),
       deduplicator_(std::move(dedup_cfg)) {
     if (metrics_) {
         last_alert_success_gauge_ = metrics_->last_alert_success_timestamp_seconds_chain;
@@ -66,10 +68,18 @@ void AlertDispatcher::dispatch(Alert alert) {
 void AlertDispatcher::run(std::stop_token st) {
   running_.store(true, std::memory_order_relaxed);
   while (true) {
+    if (heartbeat_) heartbeat_->record();
     Alert alert;
     {
       std::unique_lock<std::mutex> lock(mutex_);
-      cv_.wait(lock, [this, &st]() {
+      // The heartbeat requires this thread to wake periodically even when
+      // idle, otherwise a quiet dispatcher would appear stuck to /readyz.
+      // cv_.wait_for returns immediately on notify_one() from dispatch(),
+      // so alert latency is unaffected — the 1-second timeout only triggers
+      // when the queue has been empty for a second, which is exactly when
+      // the heartbeat needs refreshing. This is a deliberate tradeoff of
+      // "no loop changes" for correct liveness reporting.
+      cv_.wait_for(lock, std::chrono::seconds(1), [this, &st]() {
         return !queue_.empty() || !running_.load(std::memory_order_relaxed) ||
                st.stop_requested();
       });

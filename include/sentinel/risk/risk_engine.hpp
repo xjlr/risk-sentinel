@@ -12,6 +12,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "sentinel/health/heartbeat.hpp"
+
 namespace sentinel::metrics {
 struct Metrics;
 }
@@ -28,7 +30,8 @@ public:
   explicit RiskEngine(RingBuffer<Signal> &input_queue,
                       AlertDispatcher &dispatcher,
                       std::string chain_name,
-                      sentinel::metrics::Metrics* metrics = nullptr);
+                      sentinel::metrics::Metrics* metrics = nullptr,
+                      sentinel::health::Heartbeat* heartbeat = nullptr);
   ~RiskEngine();
 
   // Prevent copy/move
@@ -53,6 +56,7 @@ private:
   std::atomic<bool> finished_{false};
   std::string chain_name_;
   sentinel::metrics::Metrics* metrics_;
+  sentinel::health::Heartbeat* heartbeat_ = nullptr;
   prometheus::Gauge* ring_buffer_depth_gauge_ = nullptr;
   
   std::unordered_map<std::string, prometheus::Counter*> alerts_generated_counters_;

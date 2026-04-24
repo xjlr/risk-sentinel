@@ -185,7 +185,8 @@ void App::init_modules_() {
   rpc_ = std::make_unique<JsonRpcClient>(cfg_.rpc_url, cfg_.chain, metrics_.get());
   arbitrum_adapter_ = std::make_unique<ArbitrumAdapter>(*rpc_);
   event_source_ = std::make_unique<sentinel::events::EventSource>(
-      *arbitrum_adapter_, *ring_buffer_, cfg_.event_source_cfg, cfg_.chain, metrics_.get());
+      *arbitrum_adapter_, *ring_buffer_, cfg_.event_source_cfg, cfg_.chain, metrics_.get(),
+      &event_source_hb_);
 
   load_customer_map_();
   load_token_map_();
@@ -210,7 +211,7 @@ void App::init_modules_() {
 
   dispatcher_ = std::make_unique<sentinel::risk::AlertDispatcher>(
       cfg_.chain, metrics_.get(),
-      std::move(dedup_cfg), std::move(rule_types));
+      std::move(dedup_cfg), std::move(rule_types), &dispatcher_hb_);
   dispatcher_->add_channel(
       std::make_unique<sentinel::risk::ConsoleAlertChannel>());
 
@@ -232,7 +233,37 @@ void App::init_modules_() {
   }
 
   risk_engine_ =
-      std::make_unique<sentinel::risk::RiskEngine>(*ring_buffer_, *dispatcher_, cfg_.chain, metrics_.get());
+      std::make_unique<sentinel::risk::RiskEngine>(*ring_buffer_, *dispatcher_, cfg_.chain, metrics_.get(),
+                                                   &risk_engine_hb_);
+
+  sentinel::health::HealthCheckInputs hc_inputs{
+      .event_source = &event_source_hb_,
+      .risk_engine  = &risk_engine_hb_,
+      .dispatcher   = &dispatcher_hb_,
+      .rpc_last_success_unix_s = [this]() -> uint64_t {
+          if (!metrics_ || !metrics_->last_rpc_success_timestamp_seconds_chain)
+              return 0;
+          return static_cast<uint64_t>(
+              metrics_->last_rpc_success_timestamp_seconds_chain->Value());
+      },
+      .db_probe = [this]() -> bool {
+          if (!conn_ || !conn_->is_open()) return false;
+          try {
+              pqxx::work tx(*conn_);
+              tx.exec("SELECT 1");
+              tx.commit();
+              return true;
+          } catch (...) {
+              return false;
+          }
+      },
+  };
+
+  sentinel::health::HealthServerConfig hc_cfg;
+  hc_cfg.listen_address = cfg_.health_listen_address;
+
+  health_server_ = std::make_unique<sentinel::health::HealthServer>(
+      std::move(hc_cfg), std::move(hc_inputs));
 }
 
 void App::register_rules_() {
@@ -606,6 +637,21 @@ void App::start_threads_() {
     set_thread_name("event_source");
     event_source_->run(st);
   });
+
+  if (health_server_) {
+    try {
+      Lcore.info("Starting HealthServer on {}", cfg_.health_listen_address);
+      health_server_->start();
+    } catch (const std::exception& e) {
+      Lcore.error(
+          "HealthServer failed to start ({}); continuing without "
+          "health endpoints. Check HEALTH_LISTEN_ADDRESS env var.",
+          e.what());
+      // Reset so stop_orderly_() does not attempt to stop a server that
+      // never started.
+      health_server_.reset();
+    }
+  }
 }
 
 void App::stop_orderly_() {
@@ -615,6 +661,14 @@ void App::stop_orderly_() {
   }
 
   auto &Lcore = sentinel::logger(sentinel::LogComponent::Core);
+
+  // Stop the health server FIRST so no /readyz probe observes a
+  // partially torn-down pipeline and so the server thread does not
+  // outlive the captured resources (conn_, metrics_).
+  if (health_server_) {
+    Lcore.info("Stopping HealthServer...");
+    health_server_->stop();
+  }
 
   if (event_source_) {
     Lcore.info("Stopping EventSource...");

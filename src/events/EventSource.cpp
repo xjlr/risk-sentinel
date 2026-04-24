@@ -15,10 +15,12 @@ EventSource::EventSource(
     sentinel::risk::RingBuffer<sentinel::risk::Signal> &out_queue,
     EventSourceConfig cfg,
     std::string chain_name,
-    sentinel::metrics::Metrics *metrics)
-    : adapter_(adapter), out_(out_queue), chain_name_(std::move(chain_name)), cfg_(cfg), metrics_(metrics),
+    sentinel::metrics::Metrics *metrics,
+    sentinel::health::Heartbeat *heartbeat)
+    : adapter_(adapter), out_(out_queue), chain_name_(std::move(chain_name)), cfg_(cfg),
       next_block_(cfg.start_block), cold_start_(cfg_.start_block == 0),
-      log_(sentinel::logger(sentinel::LogComponent::EventSource)) {
+      log_(sentinel::logger(sentinel::LogComponent::EventSource)),
+      metrics_(metrics), heartbeat_(heartbeat) {
   chain_id_ = adapter_.chainId();
   if (metrics_) {
     metrics_events_ingested_ = metrics_->events_ingested_chain;
@@ -36,6 +38,7 @@ void EventSource::run(std::stop_token st) {
             next_block_);
 
   while (running_ && !st.stop_requested()) {
+    if (heartbeat_) heartbeat_->record();
     bool work_done = false;
     try {
       work_done = poll_once();

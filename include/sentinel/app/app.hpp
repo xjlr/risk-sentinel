@@ -11,6 +11,9 @@
 
 #include "sentinel/chains/arbitrum/ArbitrumAdapter.hpp"
 #include "sentinel/events/EventSource.hpp"
+#include "sentinel/health/heartbeat.hpp"
+#include "sentinel/health/health_server.hpp"
+#include "sentinel/metrics/metrics.hpp"
 #include "sentinel/risk/alert_dispatcher.hpp"
 #include "sentinel/risk/approval_config.hpp"
 #include "sentinel/risk/governance_config.hpp"
@@ -20,7 +23,6 @@
 #include "sentinel/risk/signal.hpp"
 #include "sentinel/risk/webhook_alert_channel.hpp"
 #include "sentinel/rpc/JsonRpcClient.hpp"
-#include "sentinel/metrics/metrics.hpp"
 
 namespace pqxx {
 class connection;
@@ -37,6 +39,7 @@ struct AppConfig {
   std::string readiness_file = "/tmp/sentinel.ready";
   std::chrono::milliseconds shutdown_drain_timeout{5000};
   std::string metrics_listen_address = "0.0.0.0:8080";
+  std::string health_listen_address  = "0.0.0.0:8081";
 };
 
 class App {
@@ -97,8 +100,16 @@ private:
   std::mutex run_mutex_;
   std::condition_variable run_cv_;
 
+  // Heartbeats — one per pipeline thread
+  sentinel::health::Heartbeat event_source_hb_;
+  sentinel::health::Heartbeat risk_engine_hb_;
+  sentinel::health::Heartbeat dispatcher_hb_;
+
   // Database
   std::shared_ptr<pqxx::connection> conn_;
+
+  // Health server (separate from metrics, default port 8081)
+  std::unique_ptr<sentinel::health::HealthServer> health_server_;
 
   // Modules
   std::unique_ptr<sentinel::metrics::Metrics> metrics_;

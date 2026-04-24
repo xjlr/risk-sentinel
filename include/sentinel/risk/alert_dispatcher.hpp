@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "sentinel/health/heartbeat.hpp"
 #include "sentinel/risk/alert_deduplicator.hpp"
 
 namespace sentinel::metrics {
@@ -53,7 +54,8 @@ public:
   AlertDispatcher(std::string chain_name,
                   sentinel::metrics::Metrics* metrics,
                   DeduplicatorConfig dedup_cfg,
-                  std::vector<std::string> rule_types);
+                  std::vector<std::string> rule_types,
+                  sentinel::health::Heartbeat* heartbeat = nullptr);
   ~AlertDispatcher();
 
   // Prevent copy/move
@@ -75,6 +77,7 @@ private:
   std::atomic<bool> running_{false};
   std::string chain_name_;
   sentinel::metrics::Metrics* metrics_;
+  sentinel::health::Heartbeat* heartbeat_ = nullptr;
 
   AlertDeduplicator deduplicator_;
 

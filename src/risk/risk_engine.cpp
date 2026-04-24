@@ -1,4 +1,5 @@
 #include "sentinel/risk/risk_engine.hpp"
+#include "sentinel/health/heartbeat.hpp"
 #include "sentinel/metrics/metrics.hpp"
 
 #include <chrono>
@@ -8,8 +9,10 @@ namespace sentinel::risk {
 RiskEngine::RiskEngine(RingBuffer<Signal> &input_queue,
                        AlertDispatcher &dispatcher,
                        std::string chain_name,
-                       sentinel::metrics::Metrics* metrics)
-    : input_queue_(input_queue), dispatcher_(dispatcher), chain_name_(std::move(chain_name)), metrics_(metrics) {
+                       sentinel::metrics::Metrics* metrics,
+                       sentinel::health::Heartbeat* heartbeat)
+    : input_queue_(input_queue), dispatcher_(dispatcher), chain_name_(std::move(chain_name)),
+      metrics_(metrics), heartbeat_(heartbeat) {
     if (metrics_) {
         ring_buffer_depth_gauge_ = metrics_->ring_buffer_depth_chain;
     }
@@ -43,6 +46,7 @@ void RiskEngine::run(std::stop_token st) {
   bool drain_mode = false;
 
   while (running_ && !st.stop_requested()) {
+    if (heartbeat_) heartbeat_->record();
     // Read from lock-free queue
     auto *signal_ptr = input_queue_.front();
     if (signal_ptr) {

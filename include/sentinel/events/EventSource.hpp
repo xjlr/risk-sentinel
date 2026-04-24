@@ -8,6 +8,7 @@
 
 #include "sentinel/events/RawLog.hpp"
 #include "sentinel/events/normalize.hpp"
+#include "sentinel/health/heartbeat.hpp"
 #include "sentinel/log.hpp"
 #include "sentinel/risk/signal.hpp"
 #include "sentinel/metrics/metrics.hpp"
@@ -33,7 +34,8 @@ public:
               sentinel::risk::RingBuffer<sentinel::risk::Signal> &out_queue,
               EventSourceConfig cfg,
               std::string chain_name,
-              sentinel::metrics::Metrics *metrics = nullptr);
+              sentinel::metrics::Metrics *metrics = nullptr,
+              sentinel::health::Heartbeat *heartbeat = nullptr);
 
   // Thread entry point
   void run(std::stop_token st = {});
@@ -60,6 +62,7 @@ private:
 
   spdlog::logger &log_;
   sentinel::metrics::Metrics *metrics_;
+  sentinel::health::Heartbeat *heartbeat_ = nullptr;
 
   // Cached metric references
   prometheus::Counter* metrics_events_ingested_{nullptr};
