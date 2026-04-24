@@ -48,6 +48,9 @@ CPMAddPackage(
 # libcurl
 find_package(CURL REQUIRED)
 
+# OpenSSL (AES-GCM + HMAC-SHA256)
+find_package(OpenSSL REQUIRED)
+
 # pqxx / pq via pkg-config
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(PQXX REQUIRED libpqxx)
@@ -73,6 +76,9 @@ add_library(sentinel_core
   src/risk/rules/approval_rule.cpp
   src/metrics/metrics.cpp
   src/app/app.cpp
+  src/risk/webhook_alert_channel.cpp
+  src/security/crypto.cpp
+  src/admin/encrypt_secret.cpp
 )
 
 
@@ -97,6 +103,7 @@ target_link_libraries(sentinel_core
     prometheus-cpp::pull
   PRIVATE
     CURL::libcurl
+    OpenSSL::Crypto
     ${PQXX_LIBRARIES}
     ${PQ_LIBRARIES}
 )

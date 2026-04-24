@@ -1,12 +1,15 @@
 #include <cerrno>
 #include <csignal>
 #include <cstdlib>
+#include <cstring>
 #include <ctime>
+#include <iostream>
 #include <string>
 
 #include <pthread.h>
 #include <thread>
 
+#include "sentinel/admin/encrypt_secret.hpp"
 #include "sentinel/app/app.hpp"
 
 static std::string getenv_or(const char *k, const char *defv) {
@@ -23,7 +26,14 @@ static bool env_is_true(const char *k) {
   return (s == "1" || s == "true" || s == "TRUE" || s == "yes" || s == "on");
 }
 
-int main(int /*argc*/, char ** /*argv*/) {
+int main(int argc, char **argv) {
+  if (argc >= 3 && std::strcmp(argv[1], "admin") == 0) {
+    if (std::strcmp(argv[2], "encrypt-secret") == 0)
+      return sentinel::admin::encrypt_secret_command(argc, argv);
+    std::cerr << "Unknown admin command: " << argv[2] << "\n";
+    return 1;
+  }
+
   sentinel::app::AppConfig cfg;
 
   cfg.chain = getenv_or("CHAIN", "arbitrum");

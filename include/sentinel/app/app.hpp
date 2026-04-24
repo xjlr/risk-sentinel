@@ -18,6 +18,7 @@
 #include "sentinel/risk/risk_engine.hpp"
 #include "sentinel/risk/rules/large_transfer_rule.hpp"
 #include "sentinel/risk/signal.hpp"
+#include "sentinel/risk/webhook_alert_channel.hpp"
 #include "sentinel/rpc/JsonRpcClient.hpp"
 #include "sentinel/metrics/metrics.hpp"
 
@@ -62,6 +63,7 @@ private:
   void load_governance_configs_();
   void load_mint_burn_configs_();
   void load_approval_configs_();
+  void load_webhook_channels_();
   void load_customer_map_();
   void load_token_map_();
   void register_rules_();
@@ -86,6 +88,9 @@ private:
   std::unordered_map<sentinel::risk::ApprovalContractKey,
                      std::vector<sentinel::risk::ApprovalRuleConfig>>
       approval_rules_by_contract_;
+  std::unordered_map<std::uint64_t,
+                     std::vector<sentinel::risk::WebhookEndpoint>>
+      customer_webhooks_;
 
   std::atomic<bool> stop_requested_{false};
   std::atomic<bool> stopped_{false};

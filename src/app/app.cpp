@@ -11,12 +11,14 @@
 #include "sentinel/events/utils/hex.hpp"
 #include "sentinel/log.hpp"
 #include "sentinel/risk/console_alert_channel.hpp"
-#include "sentinel/risk/rules/large_transfer_rule.hpp"
-#include "sentinel/risk/rules/governance_rule.hpp"
-#include "sentinel/risk/telegram_alert_channel.hpp"
-#include "sentinel/version.hpp"
 #include "sentinel/risk/rules/approval_rule.hpp"
+#include "sentinel/risk/rules/governance_rule.hpp"
+#include "sentinel/risk/rules/large_transfer_rule.hpp"
 #include "sentinel/risk/rules/mint_burn_rule.hpp"
+#include "sentinel/risk/telegram_alert_channel.hpp"
+#include "sentinel/risk/webhook_alert_channel.hpp"
+#include "sentinel/security/crypto.hpp"
+#include "sentinel/version.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -190,6 +192,7 @@ void App::init_modules_() {
   load_governance_configs_();
   load_mint_burn_configs_();
   load_approval_configs_();
+  load_webhook_channels_();
 
   dispatcher_ = std::make_unique<sentinel::risk::AlertDispatcher>(cfg_.chain, metrics_.get());
   dispatcher_->add_channel(
@@ -204,6 +207,12 @@ void App::init_modules_() {
               bot_token, chat_id, &customer_id_to_key_,
               &token_addresses_to_symbols_));
     }
+  }
+
+  if (!customer_webhooks_.empty()) {
+    dispatcher_->add_channel(
+        std::make_unique<sentinel::risk::WebhookAlertChannel>(
+            std::move(customer_webhooks_)));
   }
 
   risk_engine_ =
@@ -467,6 +476,98 @@ void App::load_token_map_() {
   sentinel::risk::TokenKey usdt_arb{
       42161, "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9"};
   token_addresses_to_symbols_[usdt_arb] = "USDT";
+}
+
+void App::load_webhook_channels_() {
+  auto &Ldb = sentinel::logger(sentinel::LogComponent::Db);
+
+  const char *master_key_env = std::getenv("SENTINEL_SECRET_MASTER_KEY");
+  if (!master_key_env || master_key_env[0] == '\0') {
+    Ldb.warn("SENTINEL_SECRET_MASTER_KEY is not set — webhook channel disabled");
+    return;
+  }
+
+  std::array<uint8_t, 32> master_key{};
+  try {
+    master_key = sentinel::security::parse_master_key_hex(master_key_env);
+  } catch (const std::exception &e) {
+    Ldb.error("SENTINEL_SECRET_MASTER_KEY is malformed: {} — webhook channel "
+              "disabled",
+              e.what());
+    return;
+  }
+
+  // Helper: decode PostgreSQL hex-format BYTEA (\x0123…) into bytes.
+  auto parse_pg_bytea = [](std::string_view s) -> std::vector<uint8_t> {
+    if (s.size() < 2 || s[0] != '\\' || s[1] != 'x')
+      throw std::runtime_error("unexpected BYTEA format (expected \\x prefix)");
+    std::vector<uint8_t> out;
+    out.reserve((s.size() - 2) / 2);
+    auto nibble = [](char c) -> uint8_t {
+      if (c >= '0' && c <= '9') return static_cast<uint8_t>(c - '0');
+      if (c >= 'a' && c <= 'f') return static_cast<uint8_t>(c - 'a' + 10);
+      if (c >= 'A' && c <= 'F') return static_cast<uint8_t>(c - 'A' + 10);
+      throw std::runtime_error(
+          std::string("invalid hex nibble in BYTEA: '") + c + "'");
+    };
+    for (size_t i = 2; i + 1 < s.size(); i += 2)
+      out.push_back(
+          static_cast<uint8_t>((nibble(s[i]) << 4) | nibble(s[i + 1])));
+    return out;
+  };
+
+  try {
+    pqxx::work tx(*conn_);
+
+    pqxx::result res = tx.exec(
+        "SELECT customer_id, url, hmac_secret_encrypted, hmac_secret_nonce "
+        "FROM customer_webhook_channels WHERE enabled = true");
+
+    size_t endpoint_count = 0;
+
+    for (const auto &row : res) {
+      uint64_t customer_id = row["customer_id"].as<uint64_t>();
+      std::string url = row["url"].as<std::string>();
+
+      std::string hmac_secret;
+
+      if (!row["hmac_secret_encrypted"].is_null() &&
+          !row["hmac_secret_nonce"].is_null()) {
+        try {
+          std::string enc_raw =
+              row["hmac_secret_encrypted"].as<std::string>();
+          std::string nonce_raw =
+              row["hmac_secret_nonce"].as<std::string>();
+
+          std::vector<uint8_t> enc_bytes = parse_pg_bytea(enc_raw);
+          std::vector<uint8_t> nonce_bytes = parse_pg_bytea(nonce_raw);
+
+          hmac_secret = sentinel::security::aes_gcm_decrypt(
+              std::span<const uint8_t>(master_key.data(), master_key.size()),
+              std::span<const uint8_t>(nonce_bytes.data(), nonce_bytes.size()),
+              std::span<const uint8_t>(enc_bytes.data(), enc_bytes.size()));
+        } catch (const std::exception &e) {
+          Ldb.error(
+              "Skipping webhook endpoint customer_id={} url={}: "
+              "decryption failed: {}",
+              customer_id, url, e.what());
+          continue;
+        }
+      }
+      // hmac_secret == "" means unsigned webhook (no secret configured)
+
+      customer_webhooks_[customer_id].push_back(
+          sentinel::risk::WebhookEndpoint{url, hmac_secret});
+      ++endpoint_count;
+    }
+
+    tx.commit();
+
+    Ldb.info("Loaded {} webhook endpoint(s) across {} customer(s)",
+             endpoint_count, customer_webhooks_.size());
+  } catch (const std::exception &e) {
+    Ldb.error("Error loading webhook channels: {}", e.what());
+  }
 }
 
 void App::start_threads_() {
