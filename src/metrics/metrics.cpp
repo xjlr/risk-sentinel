@@ -27,6 +27,10 @@ Metrics::Metrics(const std::string& listen_address, const std::string& chain)
           .Name("alerts_send_failures_total")
           .Help("Total number of alert send failures")
           .Register(*registry)),
+      alerts_deduplicated_total(prometheus::BuildCounter()
+          .Name("alerts_deduplicated_total")
+          .Help("Total number of alerts suppressed by the deduplicator")
+          .Register(*registry)),
       rpc_calls_total(prometheus::BuildCounter()
           .Name("rpc_calls_total")
           .Help("Total number of RPC calls made")

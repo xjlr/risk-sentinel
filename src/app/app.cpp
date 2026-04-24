@@ -194,7 +194,23 @@ void App::init_modules_() {
   load_approval_configs_();
   load_webhook_channels_();
 
-  dispatcher_ = std::make_unique<sentinel::risk::AlertDispatcher>(cfg_.chain, metrics_.get());
+  sentinel::risk::DeduplicatorConfig dedup_cfg;
+  dedup_cfg.default_window_ms = 60'000;
+  dedup_cfg.per_rule_window_ms = {
+      {"large_transfer",  60'000},
+      {"governance",      3'600'000},
+      {"mint_burn",       60'000},
+      {"approval",        300'000},
+  };
+  dedup_cfg.cleanup_every_n_alerts = 100;
+
+  std::vector<std::string> rule_types = {
+      "large_transfer", "governance", "mint_burn", "approval"
+  };
+
+  dispatcher_ = std::make_unique<sentinel::risk::AlertDispatcher>(
+      cfg_.chain, metrics_.get(),
+      std::move(dedup_cfg), std::move(rule_types));
   dispatcher_->add_channel(
       std::make_unique<sentinel::risk::ConsoleAlertChannel>());
 

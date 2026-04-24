@@ -20,6 +20,7 @@ add_executable(unit_tests
   test_regression_existing_flows.cpp
   test_crypto.cpp
   test_webhook_alert_channel.cpp
+  test_alert_deduplicator.cpp
 )
 
 target_link_libraries(unit_tests PRIVATE

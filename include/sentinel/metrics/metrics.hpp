@@ -23,6 +23,7 @@ struct Metrics {
     prometheus::Family<prometheus::Counter>& alerts_generated_total;
     prometheus::Family<prometheus::Counter>& alerts_sent_total;
     prometheus::Family<prometheus::Counter>& alerts_send_failures_total;
+    prometheus::Family<prometheus::Counter>& alerts_deduplicated_total;
     prometheus::Family<prometheus::Counter>& rpc_calls_total;
 
     // Gauges

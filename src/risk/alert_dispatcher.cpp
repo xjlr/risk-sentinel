@@ -3,17 +3,33 @@
 #include "sentinel/log.hpp"
 #include "sentinel/risk/alert_channel.hpp"
 #include <cassert>
+#include <chrono>
 #include <exception>
 
 namespace sentinel::risk {
 
-AlertDispatcher::AlertDispatcher(std::string chain_name, sentinel::metrics::Metrics* metrics)
-    : chain_name_(std::move(chain_name)), metrics_(metrics) {
+AlertDispatcher::AlertDispatcher(std::string chain_name,
+                                 sentinel::metrics::Metrics* metrics,
+                                 DeduplicatorConfig dedup_cfg,
+                                 std::vector<std::string> rule_types)
+    : chain_name_(std::move(chain_name)),
+      metrics_(metrics),
+      deduplicator_(std::move(dedup_cfg)) {
     if (metrics_) {
         last_alert_success_gauge_ = metrics_->last_alert_success_timestamp_seconds_chain;
         alert_queue_depth_gauge_ = metrics_->alert_queue_depth_chain;
-        alert_send_duration_hist_ = &metrics_->alert_send_duration_seconds.Add({{"chain", chain_name_}}, prometheus::Histogram::BucketBoundaries{0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0});
-        signal_to_alert_hist_ = &metrics_->signal_to_alert_seconds.Add({{"chain", chain_name_}}, prometheus::Histogram::BucketBoundaries{0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0});
+        alert_send_duration_hist_ = &metrics_->alert_send_duration_seconds.Add(
+            {{"chain", chain_name_}},
+            prometheus::Histogram::BucketBoundaries{0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0});
+        signal_to_alert_hist_ = &metrics_->signal_to_alert_seconds.Add(
+            {{"chain", chain_name_}},
+            prometheus::Histogram::BucketBoundaries{0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0});
+
+        for (const auto& rule_type : rule_types) {
+            alerts_deduplicated_counters_[rule_type] =
+                &metrics_->alerts_deduplicated_total.Add(
+                    {{"chain", chain_name_}, {"rule_type", rule_type}});
+        }
     }
 }
 
@@ -72,6 +88,19 @@ void AlertDispatcher::run(std::stop_token st) {
       alert = std::move(queue_.front());
       queue_.pop();
       if (alert_queue_depth_gauge_) alert_queue_depth_gauge_->Set(queue_.size());
+    }
+
+    const uint64_t now_ms = static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch())
+            .count());
+
+    if (deduplicator_.should_suppress(alert, now_ms)) {
+      auto it = alerts_deduplicated_counters_.find(alert.rule_type);
+      if (it != alerts_deduplicated_counters_.end() && it->second) {
+        it->second->Increment();
+      }
+      continue;
     }
 
     auto send_start = std::chrono::steady_clock::now();

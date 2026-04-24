@@ -145,6 +145,27 @@ Multiple channels can be active simultaneously. The `AlertDispatcher` fans out e
 | Telegram | HTTP POST to Telegram Bot API (`/sendMessage`) | No — shared `chat_id` | No |
 | Webhook | HTTPS POST to customer-supplied URL | Yes — one or more URLs per customer | Yes — HMAC-SHA256; secrets AES-256-GCM encrypted at rest |
 
+### Alert Deduplication
+
+Before fanning out to channels, `AlertDispatcher` passes each alert through `AlertDeduplicator`. If an alert with the same dedup key has already been sent within the configured window, the alert is dropped silently.
+
+**Dedup key:** `(customer_id, rule_type, chain_id, token_address)` — four fields concatenated with `|` as separator. A `null` `chain_id` is encoded as `-`; a `null` `token_address` is encoded as an empty string.
+
+**Default windows:**
+
+| Rule type | Window |
+|---|---|
+| `large_transfer` | 1 minute |
+| `mint_burn` | 1 minute |
+| `approval` | 5 minutes |
+| `governance` | 1 hour — governance changes are rare; a repeat within an hour is still deduplicated |
+| (any other rule) | 1 minute (default) |
+
+**Counter semantics:**
+- A suppressed alert still increments `alerts_generated_total` (the rule fired).
+- It does **not** increment `alerts_sent_total` or `alerts_send_failures_total`.
+- Use `alerts_deduplicated_total{chain, rule_type}` to measure how many alerts were dropped per rule.
+
 ## Database Schema
 
 | Table | Purpose |
@@ -170,6 +191,7 @@ Risk Sentinel exposes Prometheus-compatible metrics at `http://<host>:8080/metri
 | `alerts_generated_total` | `chain`, `rule_type` | Alerts produced by the risk engine |
 | `alerts_sent_total` | `chain`, `channel` | Alerts successfully delivered by a channel |
 | `alerts_send_failures_total` | `chain`, `channel` | Alert delivery failures (network errors, non-2xx HTTP, etc.) |
+| `alerts_deduplicated_total` | `chain`, `rule_type` | Alerts suppressed by the deduplicator because an earlier alert with the same key fired within the configured window |
 | `rpc_calls_total` | `chain`, `method`, `status` | Total JSON-RPC calls made — `method` is the RPC method name (e.g. `eth_getLogs`); `status` is `success` or `error` |
 
 ### Gauges

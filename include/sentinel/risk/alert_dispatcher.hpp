@@ -10,6 +10,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "sentinel/risk/alert_deduplicator.hpp"
+
 namespace sentinel::metrics {
 struct Metrics;
 }
@@ -48,7 +50,10 @@ struct Alert {
 
 class AlertDispatcher {
 public:
-  AlertDispatcher(std::string chain_name, sentinel::metrics::Metrics* metrics = nullptr);
+  AlertDispatcher(std::string chain_name,
+                  sentinel::metrics::Metrics* metrics,
+                  DeduplicatorConfig dedup_cfg,
+                  std::vector<std::string> rule_types);
   ~AlertDispatcher();
 
   // Prevent copy/move
@@ -71,8 +76,11 @@ private:
   std::string chain_name_;
   sentinel::metrics::Metrics* metrics_;
 
+  AlertDeduplicator deduplicator_;
+
   std::unordered_map<std::string, prometheus::Counter*> alerts_sent_counters_;
   std::unordered_map<std::string, prometheus::Counter*> alerts_send_failures_counters_;
+  std::unordered_map<std::string, prometheus::Counter*> alerts_deduplicated_counters_;
 
   prometheus::Gauge* last_alert_success_gauge_ = nullptr;
   prometheus::Gauge* alert_queue_depth_gauge_ = nullptr;
