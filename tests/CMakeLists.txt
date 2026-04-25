@@ -22,6 +22,7 @@ add_executable(unit_tests
   test_webhook_alert_channel.cpp
   test_alert_deduplicator.cpp
   test_health_checks.cpp
+  test_bridge_transfer_rule.cpp
 )
 
 target_link_libraries(unit_tests PRIVATE

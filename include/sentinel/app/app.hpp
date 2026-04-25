@@ -8,6 +8,7 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "sentinel/chains/arbitrum/ArbitrumAdapter.hpp"
 #include "sentinel/events/EventSource.hpp"
@@ -16,6 +17,7 @@
 #include "sentinel/metrics/metrics.hpp"
 #include "sentinel/risk/alert_dispatcher.hpp"
 #include "sentinel/risk/approval_config.hpp"
+#include "sentinel/risk/bridge_config.hpp"
 #include "sentinel/risk/governance_config.hpp"
 #include "sentinel/risk/mint_burn_config.hpp"
 #include "sentinel/risk/risk_engine.hpp"
@@ -66,6 +68,7 @@ private:
   void load_governance_configs_();
   void load_mint_burn_configs_();
   void load_approval_configs_();
+  void load_bridge_configs_();
   void load_webhook_channels_();
   void load_customer_map_();
   void load_token_map_();
@@ -91,6 +94,11 @@ private:
   std::unordered_map<sentinel::risk::ApprovalContractKey,
                      std::vector<sentinel::risk::ApprovalRuleConfig>>
       approval_rules_by_contract_;
+  std::unordered_map<sentinel::risk::BridgeRuleKey,
+                     std::vector<sentinel::risk::BridgeRuleConfig>>
+      bridge_configs_by_key_;
+  std::unordered_set<sentinel::risk::BridgeAddressKey> bridge_addresses_;
+  std::unordered_map<sentinel::risk::BridgeAddressKey, std::string> bridge_names_;
   std::unordered_map<std::uint64_t,
                      std::vector<sentinel::risk::WebhookEndpoint>>
       customer_webhooks_;

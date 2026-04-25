@@ -134,6 +134,7 @@ Rules are evaluated by the `RiskEngine` using an interest-mask: each rule declar
 | MintBurn | MintBurn | Fires when a mint or burn amount exceeds the per-customer threshold for a monitored token |
 | Approval (large) | Approval | Fires when an ERC-20 allowance exceeds a per-customer threshold |
 | Approval (infinite) | Approval | Fires when `allowance == uint256.max`; configurable per customer |
+| BridgeTransfer | Transfer | Fires when a transfer to a known cross-chain bridge contract exceeds the customer's threshold for that token |
 
 ## Alert Channels
 
@@ -159,6 +160,7 @@ Before fanning out to channels, `AlertDispatcher` passes each alert through `Ale
 | `mint_burn` | 1 minute |
 | `approval` | 5 minutes |
 | `governance` | 1 hour — governance changes are rare; a repeat within an hour is still deduplicated |
+| `bridge_transfer` | 1 minute |
 | (any other rule) | 1 minute (default) |
 
 **Counter semantics:**
@@ -177,6 +179,8 @@ Before fanning out to channels, `AlertDispatcher` passes each alert through `Ale
 | `customer_mint_burn_rules` | Mint/burn alert thresholds: mint and burn limits per (customer, chain, token) |
 | `customer_approval_rules` | Approval alert config: allowance threshold and infinite-approval flag per (customer, chain, token) |
 | `customer_webhook_channels` | Webhook endpoint registry: URL and AES-256-GCM encrypted HMAC secret per customer |
+| `bridge_contracts` | Operator-maintained global registry of known cross-chain bridge contract addresses per chain |
+| `customer_bridge_rules` | Per-customer thresholds for alerts on transfers to bridge contracts |
 
 ## Observability
 

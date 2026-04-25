@@ -12,6 +12,7 @@
 #include "sentinel/log.hpp"
 #include "sentinel/risk/console_alert_channel.hpp"
 #include "sentinel/risk/rules/approval_rule.hpp"
+#include "sentinel/risk/rules/bridge_transfer_rule.hpp"
 #include "sentinel/risk/rules/governance_rule.hpp"
 #include "sentinel/risk/rules/large_transfer_rule.hpp"
 #include "sentinel/risk/rules/mint_burn_rule.hpp"
@@ -193,20 +194,22 @@ void App::init_modules_() {
   load_governance_configs_();
   load_mint_burn_configs_();
   load_approval_configs_();
+  load_bridge_configs_();
   load_webhook_channels_();
 
   sentinel::risk::DeduplicatorConfig dedup_cfg;
   dedup_cfg.default_window_ms = 60'000;
   dedup_cfg.per_rule_window_ms = {
-      {"large_transfer",  60'000},
-      {"governance",      3'600'000},
-      {"mint_burn",       60'000},
+      {"large_transfer",   60'000},
+      {"governance",    3'600'000},
+      {"mint_burn",        60'000},
       {"approval",        300'000},
+      {"bridge_transfer",  60'000},
   };
   dedup_cfg.cleanup_every_n_alerts = 100;
 
   std::vector<std::string> rule_types = {
-      "large_transfer", "governance", "mint_burn", "approval"
+      "large_transfer", "governance", "mint_burn", "approval", "bridge_transfer"
   };
 
   dispatcher_ = std::make_unique<sentinel::risk::AlertDispatcher>(
@@ -294,6 +297,11 @@ void App::register_rules_() {
       std::make_unique<sentinel::risk::ApprovalRule>(approval_rules_by_contract_);
   risk_engine_->register_rule(approval_rule.get());
   rules_.push_back(std::move(approval_rule));
+
+  auto bridge_rule = std::make_unique<sentinel::risk::BridgeTransferRule>(
+      std::move(bridge_configs_by_key_), bridge_addresses_, bridge_names_);
+  risk_engine_->register_rule(bridge_rule.get());
+  rules_.push_back(std::move(bridge_rule));
 }
 
 std::vector<sentinel::risk::LargeTransferRuleConfig>
@@ -493,6 +501,89 @@ void App::load_approval_configs_() {
     Ldb.info("Loaded {} approval rules", count);
   } catch (const std::exception &e) {
     Ldb.error("Error loading approval configurations: {}", e.what());
+  }
+}
+
+void App::load_bridge_configs_() {
+  auto &Ldb = sentinel::logger(sentinel::LogComponent::Db);
+
+  try {
+    pqxx::work tx(*conn_);
+
+    // Query 1: load the global bridge contract registry.
+    pqxx::result res1 = tx.exec(R"(
+      SELECT chain_id, address, bridge_name
+      FROM bridge_contracts
+      WHERE enabled = true
+    )");
+
+    std::unordered_map<uint64_t, std::size_t> chains_seen;
+    for (const auto &row : res1) {
+      uint64_t chain_id = row["chain_id"].as<uint64_t>();
+      std::string address = row["address"].as<std::string>();
+      std::string bridge_name = row["bridge_name"].as<std::string>();
+
+      std::transform(address.begin(), address.end(), address.begin(), ::tolower);
+
+      std::array<uint8_t, 20> addr_bytes{};
+      sentinel::events::utils::parse_hex_bytes(address, addr_bytes);
+
+      sentinel::risk::BridgeAddressKey key{chain_id, addr_bytes};
+      bridge_addresses_.insert(key);
+      bridge_names_[key] = std::move(bridge_name);
+      chains_seen[chain_id]++;
+    }
+
+    if (bridge_addresses_.empty()) {
+      Ldb.warn("No bridge contracts loaded — bridge_transfer rule will never fire; "
+               "skipping customer_bridge_rules query");
+      tx.commit();
+      return;
+    }
+
+    Ldb.info("Loaded {} bridge contracts across {} chain(s)",
+             bridge_addresses_.size(), chains_seen.size());
+
+    // Query 2: load per-customer bridge transfer rules.
+    pqxx::result res2 = tx.exec(R"(
+      SELECT customer_id, chain_id, token_address, threshold_raw
+      FROM customer_bridge_rules
+      WHERE enabled = true
+    )");
+
+    std::size_t config_count = 0;
+    for (const auto &row : res2) {
+      uint64_t customer_id = row["customer_id"].as<uint64_t>();
+      uint64_t chain_id = row["chain_id"].as<uint64_t>();
+      std::string token_address = row["token_address"].as<std::string>();
+      std::string threshold_raw = row["threshold_raw"].as<std::string>();
+
+      std::transform(token_address.begin(), token_address.end(),
+                     token_address.begin(), ::tolower);
+
+      sentinel::risk::BridgeRuleConfig config{};
+      config.customer_id = customer_id;
+      config.chain_id = chain_id;
+      config.enabled = true;
+      sentinel::events::utils::parse_hex_bytes(token_address, config.token_address);
+      config.threshold_be = sentinel::events::utils::decimal_to_be_256(threshold_raw);
+
+      sentinel::risk::BridgeRuleKey key{config.chain_id, config.token_address};
+      bridge_configs_by_key_[key].push_back(config);
+      ++config_count;
+    }
+
+    tx.commit();
+
+    if (config_count == 0) {
+      Ldb.warn("No customer bridge rules loaded — no bridge_transfer alerts will fire");
+    } else {
+      Ldb.info("Loaded {} customer bridge rule(s) across {} (chain, token) key(s)",
+               config_count, bridge_configs_by_key_.size());
+    }
+
+  } catch (const std::exception &e) {
+    Ldb.error("Error loading bridge configurations: {}", e.what());
   }
 }
 
