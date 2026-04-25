@@ -16,6 +16,7 @@
 #include "sentinel/risk/rules/governance_rule.hpp"
 #include "sentinel/risk/rules/large_transfer_rule.hpp"
 #include "sentinel/risk/rules/mint_burn_rule.hpp"
+#include "sentinel/risk/rules/oracle_update_rule.hpp"
 #include "sentinel/risk/telegram_alert_channel.hpp"
 #include "sentinel/risk/webhook_alert_channel.hpp"
 #include "sentinel/security/crypto.hpp"
@@ -195,6 +196,7 @@ void App::init_modules_() {
   load_mint_burn_configs_();
   load_approval_configs_();
   load_bridge_configs_();
+  load_oracle_configs_();
   load_webhook_channels_();
 
   sentinel::risk::DeduplicatorConfig dedup_cfg;
@@ -205,11 +207,13 @@ void App::init_modules_() {
       {"mint_burn",        60'000},
       {"approval",        300'000},
       {"bridge_transfer",  60'000},
+      {"oracle_update",   300'000},
   };
   dedup_cfg.cleanup_every_n_alerts = 100;
 
   std::vector<std::string> rule_types = {
-      "large_transfer", "governance", "mint_burn", "approval", "bridge_transfer"
+      "large_transfer", "governance", "mint_burn", "approval",
+      "bridge_transfer", "oracle_update"
   };
 
   dispatcher_ = std::make_unique<sentinel::risk::AlertDispatcher>(
@@ -302,6 +306,11 @@ void App::register_rules_() {
       std::move(bridge_configs_by_key_), bridge_addresses_, bridge_names_);
   risk_engine_->register_rule(bridge_rule.get());
   rules_.push_back(std::move(bridge_rule));
+
+  auto oracle_rule = std::make_unique<sentinel::risk::OracleUpdateRule>(
+      std::move(oracle_configs_by_feed_));
+  risk_engine_->register_rule(oracle_rule.get());
+  rules_.push_back(std::move(oracle_rule));
 }
 
 std::vector<sentinel::risk::LargeTransferRuleConfig>
@@ -584,6 +593,83 @@ void App::load_bridge_configs_() {
 
   } catch (const std::exception &e) {
     Ldb.error("Error loading bridge configurations: {}", e.what());
+  }
+}
+
+void App::load_oracle_configs_() {
+  auto &Ldb = sentinel::logger(sentinel::LogComponent::Db);
+
+  try {
+    pqxx::work tx(*conn_);
+
+    pqxx::result res = tx.exec(R"(
+      SELECT customer_id, chain_id, aggregator_address, feed_label,
+             spike_threshold_bps, decimals
+      FROM customer_oracle_rules
+      WHERE enabled = true
+    )");
+
+    std::size_t count = 0;
+    for (const auto &row : res) {
+      uint64_t customer_id = row["customer_id"].as<uint64_t>();
+      uint64_t chain_id = row["chain_id"].as<uint64_t>();
+      std::string aggregator_address = row["aggregator_address"].as<std::string>();
+      std::string feed_label = row["feed_label"].as<std::string>();
+      int spike_threshold_bps = row["spike_threshold_bps"].as<int>();
+      int decimals = row["decimals"].as<int>();
+
+      std::transform(aggregator_address.begin(), aggregator_address.end(),
+                     aggregator_address.begin(), ::tolower);
+
+      // The DB CHECK constraints guarantee these ranges, but we verify
+      // defensively to catch a malformed row before propagating it into
+      // the rule's hot path.
+      if (spike_threshold_bps <= 0 || spike_threshold_bps > 100000) {
+        Ldb.warn("Skipping oracle rule with out-of-range spike_threshold_bps={} "
+                 "for customer_id={} aggregator={}",
+                 spike_threshold_bps, customer_id, aggregator_address);
+        continue;
+      }
+      if (decimals < 0 || decimals > 255) {
+        Ldb.warn("Skipping oracle rule with out-of-range decimals={} "
+                 "for customer_id={} aggregator={}",
+                 decimals, customer_id, aggregator_address);
+        continue;
+      }
+
+      sentinel::risk::OracleRuleConfig cfg{};
+      cfg.customer_id = customer_id;
+      cfg.chain_id = chain_id;
+      cfg.feed_label = std::move(feed_label);
+      cfg.spike_threshold_bps = static_cast<uint32_t>(spike_threshold_bps);
+      cfg.decimals = static_cast<uint8_t>(decimals);
+      cfg.enabled = true;
+
+      try {
+        sentinel::events::utils::parse_hex_bytes(aggregator_address,
+                                                 cfg.aggregator_address);
+      } catch (const std::exception &e) {
+        Ldb.warn("Skipping oracle rule with malformed aggregator_address='{}' "
+                 "for customer_id={}: {}",
+                 aggregator_address, customer_id, e.what());
+        continue;
+      }
+
+      sentinel::risk::OracleFeedKey key{cfg.chain_id, cfg.aggregator_address};
+      oracle_configs_by_feed_[key].push_back(std::move(cfg));
+      ++count;
+    }
+
+    tx.commit();
+
+    if (count == 0) {
+      Ldb.warn("No oracle rules loaded — oracle_update alerts will not fire");
+    } else {
+      Ldb.info("Loaded {} oracle rule(s) across {} feed(s)", count,
+               oracle_configs_by_feed_.size());
+    }
+  } catch (const std::exception &e) {
+    Ldb.error("Error loading oracle configurations: {}", e.what());
   }
 }
 

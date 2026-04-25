@@ -20,6 +20,7 @@
 #include "sentinel/risk/bridge_config.hpp"
 #include "sentinel/risk/governance_config.hpp"
 #include "sentinel/risk/mint_burn_config.hpp"
+#include "sentinel/risk/oracle_config.hpp"
 #include "sentinel/risk/risk_engine.hpp"
 #include "sentinel/risk/rules/large_transfer_rule.hpp"
 #include "sentinel/risk/signal.hpp"
@@ -69,6 +70,7 @@ private:
   void load_mint_burn_configs_();
   void load_approval_configs_();
   void load_bridge_configs_();
+  void load_oracle_configs_();
   void load_webhook_channels_();
   void load_customer_map_();
   void load_token_map_();
@@ -99,6 +101,9 @@ private:
       bridge_configs_by_key_;
   std::unordered_set<sentinel::risk::BridgeAddressKey> bridge_addresses_;
   std::unordered_map<sentinel::risk::BridgeAddressKey, std::string> bridge_names_;
+  std::unordered_map<sentinel::risk::OracleFeedKey,
+                     std::vector<sentinel::risk::OracleRuleConfig>>
+      oracle_configs_by_feed_;
   std::unordered_map<std::uint64_t,
                      std::vector<sentinel::risk::WebhookEndpoint>>
       customer_webhooks_;

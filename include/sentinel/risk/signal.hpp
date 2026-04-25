@@ -25,12 +25,13 @@ enum class SignalType : uint8_t {
   PoolSnapshot,
   Governance, // Minimal placeholder for future governance non-transfer alerts
   Approval,
+  OracleUpdate,
 
   // Internal signals
   Control
 };
 
-constexpr std::size_t SignalTypeCount = 10;
+constexpr std::size_t SignalTypeCount = 11;
 
 struct SignalMeta {
   uint64_t timestamp_ms;
@@ -98,10 +99,18 @@ struct MintBurnEvent {
   std::array<uint8_t, 20> to;
 };
 
+struct OracleUpdateEvent {
+  uint64_t chain_id;
+  std::array<uint8_t, 20> aggregator_address;
+  std::array<uint8_t, 32> current_answer; // int256 big-endian
+  std::array<uint8_t, 32> round_id;
+  uint64_t updated_at; // unix seconds
+};
+
 // Use std::variant, no inheritance
 using SignalPayload = std::variant<std::monostate, EvmLogEvent, PriceTick,
                                    PoolSnapshot, GovernanceEvent, ControlSignal,
-                                   MintBurnEvent>;
+                                   MintBurnEvent, OracleUpdateEvent>;
 
 struct Signal {
   SignalType type;

@@ -75,6 +75,18 @@ std::string AlertFormatter::format_telegram(
       }
       text += "Token: " + symbol_or_contract + "\n";
     }
+  } else if (alert.rule_type == "oracle_update") {
+    text += "Type: Oracle Update\n";
+    text += "Message: " + alert.message + "\n";
+    if (alert.chain_id) {
+      text += "Chain ID: " + std::to_string(*alert.chain_id) + "\n";
+    }
+    if (alert.amount_decimal && !alert.amount_decimal->empty()) {
+      text += "Current value: " + *alert.amount_decimal + "\n";
+    }
+    if (alert.token_address && !alert.token_address->empty()) {
+      text += "Aggregator: " + *alert.token_address + "\n";
+    }
   } else {
     text += "Message: " + alert.message + "\n";
     if (alert.amount_decimal && !alert.amount_decimal->empty()) {

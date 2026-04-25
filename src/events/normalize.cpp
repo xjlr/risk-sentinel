@@ -37,6 +37,12 @@ constexpr auto TOPIC_UPGRADED = utils::parse_topic_literal(
 constexpr auto TOPIC_APPROVAL = utils::parse_topic_literal(
     "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925");
 
+// Chainlink AggregatorV3Interface AnswerUpdated event:
+//   AnswerUpdated(int256 indexed current, uint256 indexed roundId, uint256 updatedAt)
+// keccak256 of "AnswerUpdated(int256,uint256,uint256)"
+constexpr auto TOPIC_ORACLE_ANSWER_UPDATED = utils::parse_topic_literal(
+    "0x0559884fd3a460db3073b7fc896cc77986f16e378210ded43186175bf646fc5f");
+
 sentinel::risk::SignalType
 classify_topic0(const std::array<uint8_t, 32> &topic0) {
   if (topic0 == TOPIC_TRANSFER)
@@ -58,6 +64,9 @@ classify_topic0(const std::array<uint8_t, 32> &topic0) {
 
   if (topic0 == TOPIC_APPROVAL)
       return sentinel::risk::SignalType::Approval;
+
+  if (topic0 == TOPIC_ORACLE_ANSWER_UPDATED)
+      return sentinel::risk::SignalType::OracleUpdate;
 
   return sentinel::risk::SignalType::Unknown;
 }
@@ -155,7 +164,7 @@ void normalize(const RawLog &raw, sentinel::risk::Signal &out,
       if ((is_mint || is_burn) && evm.data_size >= 32) {
         out.type = sentinel::risk::SignalType::MintBurn;
         sentinel::risk::MintBurnEvent mb{};
-        
+
         if (is_mint && is_burn) {
           mb.direction = sentinel::risk::MintBurnDirection::Unknown;
         } else if (is_mint) {
@@ -163,16 +172,35 @@ void normalize(const RawLog &raw, sentinel::risk::Signal &out,
         } else {
           mb.direction = sentinel::risk::MintBurnDirection::Burn;
         }
-        
+
         mb.chain_id = evm.chain_id;
         mb.token_address = evm.address;
-        
+
         std::copy_n(evm.data.begin(), 32, mb.amount.begin());
         std::copy_n(evm.topics[1].end() - 20, 20, mb.from.begin());
         std::copy_n(evm.topics[2].end() - 20, 20, mb.to.begin());
-        
+
         out.payload = mb;
       }
+    } else if (out.type == sentinel::risk::SignalType::OracleUpdate
+               && evm.topic_count >= 3
+               && evm.data_size >= 32) {
+
+      sentinel::risk::OracleUpdateEvent oracle{};
+      oracle.chain_id = evm.chain_id;
+      oracle.aggregator_address = evm.address;
+      oracle.current_answer = evm.topics[1]; // indexed int256
+      oracle.round_id       = evm.topics[2]; // indexed uint256
+
+      // updatedAt is the first 32-byte slot of `data`; extract its low 8 bytes
+      // as a uint64 (the high 24 bytes are zero for any realistic timestamp).
+      uint64_t updated_at = 0;
+      for (int i = 0; i < 8; ++i) {
+        updated_at = (updated_at << 8) | evm.data[24 + i];
+      }
+      oracle.updated_at = updated_at;
+
+      out.payload = oracle;
     }
 
   } else {

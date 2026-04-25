@@ -116,6 +116,7 @@ All signals are derived from raw EVM log entries by matching `topic0`. The norma
 | Swap (Uniswap V3) | `Swap(address indexed sender, address indexed recipient, int256 amount0, int256 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick)` | `0xc42079f94a6350d7e5735f2a153e368fc95153e172ee90824036511a8fb417b3` |
 | LiquidityChange (Mint) | `Mint(address indexed sender, uint256 amount0, uint256 amount1)` | `0x4c209b5fc8ad50758f13e2e1088ba56a560dff694af163234d7f6c31034c568d` |
 | LiquidityChange (Burn) | `Burn(address indexed sender, uint256 amount0, uint256 amount1, address indexed to)` | `0xdccd28e36055d506992d9d40a08e08d6691c9569707248066f2c2f82998396e9` |
+| OracleUpdate | `AnswerUpdated(int256 indexed,uint256 indexed,uint256)` | `0x0559884fd3a460db3073b7fc896cc77986f16e378210ded43186175bf646fc5f` |
 
 > Swap and LiquidityChange signals are normalized and classified but no alert rules are implemented for them yet.
 
@@ -135,6 +136,16 @@ Rules are evaluated by the `RiskEngine` using an interest-mask: each rule declar
 | Approval (large) | Approval | Fires when an ERC-20 allowance exceeds a per-customer threshold |
 | Approval (infinite) | Approval | Fires when `allowance == uint256.max`; configurable per customer |
 | BridgeTransfer | Transfer | Fires when a transfer to a known cross-chain bridge contract exceeds the customer's threshold for that token |
+| OracleSpike | OracleUpdate | Fires when a Chainlink price feed update changes by more than the customer's threshold (basis points) compared to the previous update for the same feed |
+
+### Oracle Update — limitations
+
+The OracleUpdate rule is stateful: it remembers the last observation per
+`(chain_id, aggregator_address)`. State is in-memory only — process restart
+resets it, so the first update per feed after a restart is silent. Negative
+prices and prices exceeding 2^64 are skipped (most production Chainlink feeds
+are non-negative and fit in int64). Pyth and other oracle protocols are not
+yet supported.
 
 ## Alert Channels
 
@@ -161,6 +172,7 @@ Before fanning out to channels, `AlertDispatcher` passes each alert through `Ale
 | `approval` | 5 minutes |
 | `governance` | 1 hour — governance changes are rare; a repeat within an hour is still deduplicated |
 | `bridge_transfer` | 1 minute |
+| `oracle_update` | 5 minutes |
 | (any other rule) | 1 minute (default) |
 
 **Counter semantics:**
@@ -181,6 +193,7 @@ Before fanning out to channels, `AlertDispatcher` passes each alert through `Ale
 | `customer_webhook_channels` | Webhook endpoint registry: URL and AES-256-GCM encrypted HMAC secret per customer |
 | `bridge_contracts` | Operator-maintained global registry of known cross-chain bridge contract addresses per chain |
 | `customer_bridge_rules` | Per-customer thresholds for alerts on transfers to bridge contracts |
+| `customer_oracle_rules` | Per-customer Chainlink feed monitoring config: aggregator address, feed label, spike threshold in bps, decimals |
 
 ## Observability
 

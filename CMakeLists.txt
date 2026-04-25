@@ -83,6 +83,7 @@ add_library(sentinel_core
   src/risk/rules/mint_burn_rule.cpp
   src/risk/rules/approval_rule.cpp
   src/risk/rules/bridge_transfer_rule.cpp
+  src/risk/rules/oracle_update_rule.cpp
   src/metrics/metrics.cpp
   src/app/app.cpp
   src/risk/webhook_alert_channel.cpp

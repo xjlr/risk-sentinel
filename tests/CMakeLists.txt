@@ -23,6 +23,8 @@ add_executable(unit_tests
   test_alert_deduplicator.cpp
   test_health_checks.cpp
   test_bridge_transfer_rule.cpp
+  test_oracle_normalize.cpp
+  test_oracle_update_rule.cpp
 )
 
 target_link_libraries(unit_tests PRIVATE
