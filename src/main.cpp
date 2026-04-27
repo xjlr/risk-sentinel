@@ -11,6 +11,8 @@
 
 #include "sentinel/admin/encrypt_secret.hpp"
 #include "sentinel/app/app.hpp"
+#include "sentinel/backtest/backtest_app.hpp"
+#include "sentinel/backtest/backtest_config.hpp"
 
 static std::string getenv_or(const char *k, const char *defv) {
   if (const char *v = std::getenv(k))
@@ -34,11 +36,42 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  if (argc >= 2 && std::strcmp(argv[1], "backtest") == 0) {
+    if (argc < 3) {
+      std::cerr << "Usage: sentinel backtest <config.yaml>\n";
+      return 2;
+    }
+
+    const std::string ethereum_rpc = getenv_or("ETHEREUM_RPC_URL", "");
+    const std::string arbitrum_rpc = getenv_or("ARBITRUM_RPC_URL", "");
+
+    try {
+      auto cfg = sentinel::backtest::load_backtest_config(argv[2]);
+      const std::string rpc_url = (cfg.chain == "ethereum")
+                                      ? ethereum_rpc
+                                      : arbitrum_rpc;
+      if (rpc_url.empty()) {
+        std::cerr << "Missing RPC URL for chain " << cfg.chain
+                  << " (set ETHEREUM_RPC_URL or ARBITRUM_RPC_URL)\n";
+        return 3;
+      }
+      sentinel::backtest::BacktestApp app(std::move(cfg), rpc_url);
+      return app.run();
+    } catch (const std::exception &e) {
+      std::cerr << "Backtest failed: " << e.what() << "\n";
+      return 4;
+    }
+  }
+
   sentinel::app::AppConfig cfg;
 
   cfg.chain = getenv_or("CHAIN", "arbitrum");
   cfg.database_url = getenv_or("DATABASE_URL", "");
-  cfg.rpc_url = getenv_or("ARBITRUM_RPC_URL", "");
+  if (cfg.chain == "ethereum") {
+    cfg.rpc_url = getenv_or("ETHEREUM_RPC_URL", "");
+  } else {
+    cfg.rpc_url = getenv_or("ARBITRUM_RPC_URL", "");
+  }
   cfg.health_listen_address = getenv_or("HEALTH_LISTEN_ADDRESS", "0.0.0.0:8081");
 
   const std::string log_level = getenv_or("LOG_LEVEL", "info");

@@ -185,9 +185,19 @@ void App::init_modules_() {
   metrics_ = std::make_unique<sentinel::metrics::Metrics>(cfg_.metrics_listen_address, cfg_.chain);
 
   rpc_ = std::make_unique<JsonRpcClient>(cfg_.rpc_url, cfg_.chain, metrics_.get());
-  arbitrum_adapter_ = std::make_unique<ArbitrumAdapter>(*rpc_);
+
+  if (cfg_.chain == "arbitrum") {
+    arbitrum_adapter_ = std::make_unique<ArbitrumAdapter>(*rpc_);
+    adapter_ = arbitrum_adapter_.get();
+  } else if (cfg_.chain == "ethereum") {
+    ethereum_adapter_ = std::make_unique<EthereumAdapter>(*rpc_);
+    adapter_ = ethereum_adapter_.get();
+  } else {
+    throw std::runtime_error("Unknown chain: " + cfg_.chain);
+  }
+
   event_source_ = std::make_unique<sentinel::events::EventSource>(
-      *arbitrum_adapter_, *ring_buffer_, cfg_.event_source_cfg, cfg_.chain, metrics_.get(),
+      *adapter_, *ring_buffer_, cfg_.event_source_cfg, cfg_.chain, metrics_.get(),
       &event_source_hb_);
 
   load_customer_map_();

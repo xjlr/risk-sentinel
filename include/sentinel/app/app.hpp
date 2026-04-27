@@ -11,6 +11,7 @@
 #include <unordered_set>
 
 #include "sentinel/chains/arbitrum/ArbitrumAdapter.hpp"
+#include "sentinel/chains/ethereum/EthereumAdapter.hpp"
 #include "sentinel/events/EventSource.hpp"
 #include "sentinel/health/heartbeat.hpp"
 #include "sentinel/health/health_server.hpp"
@@ -130,6 +131,8 @@ private:
       ring_buffer_;
   std::unique_ptr<JsonRpcClient> rpc_;
   std::unique_ptr<ArbitrumAdapter> arbitrum_adapter_;
+  std::unique_ptr<EthereumAdapter> ethereum_adapter_;
+  ChainAdapter *adapter_ = nullptr;
   std::unique_ptr<sentinel::events::EventSource> event_source_;
   std::unique_ptr<sentinel::risk::AlertDispatcher> dispatcher_;
   std::unique_ptr<sentinel::risk::RiskEngine> risk_engine_;

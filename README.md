@@ -292,6 +292,112 @@ Readiness fails (503) if:
 
 During startup, before the first RPC call succeeds, `rpc_recent` reports `ok=true` with detail `no RPC calls yet` to avoid false-negative startup flapping.
 
+## Historical Backtesting
+
+Risk Sentinel can replay historical block ranges through its full
+detection pipeline, producing a JSON Lines report of every alert that
+would have fired. This validates rule coverage against known historical
+exploits and produces case study material for prospective customers.
+
+### Threshold realism
+
+Backtest configurations use **production-realistic thresholds** — the
+values a real customer would actually configure to avoid false positives
+in normal operation. A backtest that requires unrealistic thresholds to
+fire is not proof of detection; it is proof the engine can fire when
+configured to fire.
+
+This means some backtests will show partial detection rather than
+perfect detection. That is the point. Honest partial coverage with clear
+gap analysis is more credible to a sophisticated security buyer than
+cherry-picked demonstrations.
+
+### Running a backtest
+
+```bash
+export ETHEREUM_RPC_URL=https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY
+./build/dev/sentinel backtest backtest_configs/nomad_2022.yaml
+```
+
+> **Note**: `backtest_configs/cream_2021.yaml` is provided as a template
+> and contains a `0xTODO_VERIFY_yUSD_AGGREGATOR_ADDRESS` placeholder for
+> the Chainlink aggregator. It must be edited with a verified address
+> (researched against Etherscan for the relevant block range) before
+> use. The Nomad config is runnable as-is.
+
+Output is written to the path specified in the YAML's `output_path`
+field (default: `./backtest_reports/<name>.jsonl`).
+
+### Backtest config format
+
+Configs are YAML files describing:
+- Target chain and block range
+- Customer(s) and their per-rule configurations
+- Bridge contract registry (for BridgeTransferRule, when used)
+
+See `backtest_configs/cream_2021.yaml` and `backtest_configs/nomad_2022.yaml`
+for complete examples.
+
+All six rule types (large_transfer, governance, mint_burn, approval,
+bridge_transfers, oracle_update) are loadable. Only sections present
+and non-empty are activated.
+
+### Provider recommendations
+
+Backtests require an archive-capable Ethereum RPC endpoint. Free public
+RPCs like Cloudflare or default Ankr do **not** serve historical blocks
+older than ~128 blocks — they will silently fail backtests beyond that
+window.
+
+**Recommended free providers for backtesting:**
+- Alchemy (free tier, 300M compute units/month, archive included)
+- Infura (free tier, 100k requests/day, archive included)
+
+**Recommended for production deployment** — dual-provider with
+automatic failover:
+- Primary: Alchemy Growth ($49/month, 1.5B compute units, 99.9% SLA)
+- Failover: Infura on different infrastructure (different cloud
+  providers means correlated outages are rare)
+- Optional emergency RPC: Cloudflare's free public endpoint, used only
+  for `eth_blockNumber` heartbeats during a primary outage so health
+  checks stay green
+
+Self-hosting an Erigon archive node becomes economically attractive
+above ~$2,000/month of provider spend. For your first paying customer,
+use a managed provider — operational simplicity outweighs the cost
+savings until you have several customers.
+
+### Output format
+
+One JSON object per line (JSONL):
+
+```json
+{"alert_index":1,"customer_id":1,"rule_type":"large_transfer",
+ "message":"Large transfer detected","timestamp_ms":1659373200000,
+ "chain_id":1,"token_address":"0xa0b8...","amount_decimal":"500000000000"}
+```
+
+Lines parse independently. Pipe through `jq` for ad-hoc analysis:
+
+```bash
+# Count alerts per rule type
+cat backtest_reports/nomad_2022.jsonl | jq -s 'group_by(.rule_type) | map({rule:.[0].rule_type, count:length})'
+
+# First 5 alerts chronologically
+cat backtest_reports/nomad_2022.jsonl | head -5 | jq .
+
+# Alerts as time series
+cat backtest_reports/nomad_2022.jsonl | jq '{ts:.timestamp_ms, rule:.rule_type, amount:.amount_decimal}'
+```
+
+Backtest output reflects **post-deduplication alerts** — the same alerts
+a real customer would have received in their channel. The dedup windows
+used in backtest match the production defaults (large_transfer 1min,
+governance 1hr, mint_burn 1min, approval 5min, bridge_transfer 1min,
+oracle_update 5min). This means the alert count in the JSONL is what
+a customer would actually see, not the raw count of rule firings before
+deduplication. Raw firing analysis is a future feature.
+
 ## Webhook Integration
 
 The webhook channel delivers a signed HTTPS POST to one or more customer-supplied URLs whenever an alert fires for that customer. Each customer can have multiple endpoints; all receive the same payload independently (fan-out, not failover).
@@ -481,6 +587,7 @@ ln -s build/dev/compile_commands.json compile_commands.json
 |---|---|---|---|
 | `DATABASE_URL` | Yes | — | PostgreSQL connection string, e.g. `postgresql://sentinel:sentinel@127.0.0.1:5433/sentinel` |
 | `ARBITRUM_RPC_URL` | Yes | — | Arbitrum JSON-RPC endpoint (HTTP or WSS) |
+| `ETHEREUM_RPC_URL` | For ethereum chain | (none) | RPC endpoint for Ethereum mainnet (Alchemy or Infura archive-enabled URL recommended) |
 | `CHAIN` | No | `arbitrum` | Chain name label used for metrics and checkpointing |
 | `SENTINEL_SECRET_MASTER_KEY` | Required for webhook | — | 64-char hex (32 bytes); used to decrypt HMAC secrets at startup. Webhook channel is disabled if absent or malformed. |
 | `TELEGRAM_BOT_TOKEN` | No | — | Telegram Bot API token; Telegram channel is disabled if absent |

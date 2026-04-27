@@ -1,0 +1,138 @@
+#include "sentinel/chains/ethereum/EthereumAdapter.hpp"
+#include "sentinel/events/utils/hex.hpp"
+#include "sentinel/log.hpp"
+
+#include <stdexcept>
+#include <string>
+
+namespace {
+
+// "0x..." hex string -> uint64
+uint64_t parseHexU64(const std::string &hex, spdlog::logger &log) {
+  if (hex.size() < 3 || hex.rfind("0x", 0) != 0) {
+    log.error("invalid hex string (expected 0x...): '{}'", hex);
+    throw std::runtime_error("Expected 0x-prefixed hex string, got: " + hex);
+  }
+
+  try {
+    return std::stoull(hex.substr(2), nullptr, 16);
+  } catch (const std::exception &e) {
+    log.error("failed to parse hex '{}' : {}", hex, e.what());
+    throw;
+  }
+}
+
+} // namespace
+
+EthereumAdapter::EthereumAdapter(JsonRpcClient &rpc)
+    : rpc_(rpc), log_(sentinel::logger(sentinel::LogComponent::Adapter)) {
+
+  log_.info("EthereumAdapter initialized");
+}
+
+std::string EthereumAdapter::name() const { return "ethereum"; }
+
+uint64_t EthereumAdapter::chainId() {
+  log_.debug("RPC call: eth_chainId");
+
+  auto res = rpc_.call("eth_chainId");
+
+  if (!res.contains("result")) {
+    log_.error("eth_chainId response missing 'result': {}", res.dump());
+    throw std::runtime_error("eth_chainId: missing result field");
+  }
+
+  const uint64_t cid = parseHexU64(res.at("result").get<std::string>(), log_);
+  log_.debug("eth_chainId -> {}", cid);
+
+  return cid;
+}
+
+uint64_t EthereumAdapter::latestBlock() {
+  log_.debug("RPC call: eth_blockNumber");
+
+  auto res = rpc_.call("eth_blockNumber");
+
+  if (!res.contains("result")) {
+    log_.error("eth_blockNumber response missing 'result': {}", res.dump());
+    throw std::runtime_error("eth_blockNumber: missing result field");
+  }
+
+  const uint64_t block = parseHexU64(res.at("result").get<std::string>(), log_);
+  log_.debug("eth_blockNumber -> {}", block);
+
+  return block;
+}
+
+uint64_t EthereumAdapter::blockTimestamp(uint64_t block_number) {
+  using nlohmann::json;
+
+  json params = json::array({
+      sentinel::events::utils::to_hex_quantity(block_number),
+      false // no full tx objects
+  });
+
+  log_.debug("RPC call: eth_getBlockByNumber block={}", block_number);
+
+  json res = rpc_.call("eth_getBlockByNumber", params);
+
+  if (!res.contains("result") || res["result"].is_null()) {
+    log_.error("eth_getBlockByNumber missing or null for block {}",
+               block_number);
+    throw std::runtime_error("eth_getBlockByNumber: missing result");
+  }
+
+  const auto &result = res["result"];
+  if (!result.contains("timestamp")) {
+    log_.error("eth_getBlockByNumber missing 'timestamp': {}", result.dump());
+    throw std::runtime_error("eth_getBlockByNumber: missing timestamp");
+  }
+
+  const uint64_t ts = parseHexU64(result["timestamp"].get<std::string>(), log_);
+  log_.debug("eth_getBlockByNumber block={} -> ts={}", block_number, ts);
+
+  return ts;
+}
+
+std::vector<sentinel::events::RawLog>
+EthereumAdapter::getLogs(uint64_t from_block, uint64_t to_block) {
+  using nlohmann::json;
+  using sentinel::events::RawLog;
+
+  if (to_block < from_block) {
+    throw std::runtime_error("getLogs: to_block < from_block");
+  }
+
+  json filter{
+      {"fromBlock", sentinel::events::utils::to_hex_quantity(from_block)},
+      {"toBlock", sentinel::events::utils::to_hex_quantity(to_block)}
+  };
+
+  log_.debug("RPC call: eth_getLogs filter={}", filter.dump());
+
+  json params = json::array({filter});
+
+  json res = rpc_.call("eth_getLogs", params);
+
+  if (!res.contains("result") || !res["result"].is_array()) {
+    log_.error("eth_getLogs: invalid response: {}", res.dump());
+    throw std::runtime_error("eth_getLogs: missing result array");
+  }
+
+  const auto &arr = res["result"];
+  log_.debug("eth_getLogs -> {} logs", arr.size());
+
+  std::vector<RawLog> out;
+  out.reserve(arr.size());
+
+  for (const auto &jlog : arr) {
+    try {
+      out.push_back(jlog.get<RawLog>());
+    } catch (const std::exception &e) {
+      log_.error("RawLog parse failed: {} json={}", e.what(), jlog.dump());
+      throw;
+    }
+  }
+
+  return out;
+}

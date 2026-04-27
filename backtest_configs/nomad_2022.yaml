@@ -1,0 +1,80 @@
+# Nomad Bridge exploit, 2022-08-01
+# ---------------------------------------------------------------------------
+# Nomad's bridge router was drained for ~$190M after a faulty initialization
+# left a zero-valued trusted root, allowing anyone to "prove" arbitrary
+# messages and extract bridged assets. The exploit was unusual: hundreds of
+# copy-cat addresses front-ran the same 0-arg call pattern and pulled
+# tokens in many small-to-mid-size batches.
+#
+# Why these thresholds:
+#   The values below are what a competent bridge ops team would actually
+#   configure to avoid drowning in false positives during normal bridge
+#   operation. They are NOT artificially low values tuned to "catch" the
+#   exploit on this dataset.
+#
+# Honest expectation:
+#   The large_transfer rule catches the bigger drains (single-tx withdrawals
+#   of $500k+ per token) but will MISS the dozens of smaller copy-cat
+#   transactions that, individually, look like routine bridge traffic. That
+#   partial-coverage gap is real, and it is precisely what motivates a
+#   future rate/anomaly rule (e.g. "N withdrawals of any size from the same
+#   bridge contract within K minutes"). Reporting honest partial detection
+#   with a clear gap analysis is more credible than tuning thresholds down
+#   until everything fires.
+#
+# Caveat:
+#   LargeTransferRule matches purely on (chain, token, amount) — it does
+#   not filter by source address. In a live deployment this config would
+#   fire on ANY large USDC/USDT transfer globally, generating false
+#   positives unrelated to the bridge. The bounded backtest block range
+#   (just before through just after the exploit) sidesteps that issue
+#   here, but production use would need either a from_address filter or
+#   a bridge-aware variant.
+
+chain: ethereum
+start_block: 15259101
+end_block: 15259198
+output_path: ./backtest_reports/nomad_2022.jsonl
+max_block_range: 50
+
+customers:
+  - id: 1
+    key: "nomad_research"
+    display_name: "Nomad Bridge Research Backtest"
+
+rules:
+  large_transfer:
+    # Realistic production thresholds for a bridge of Nomad's TVL.
+    # These thresholds should produce zero alerts in normal operation.
+    - customer_id: 1
+      chain_id: 1
+      token_address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+      threshold_decimal: "500000000000"   # 500,000 USDC (6 decimals)
+    - customer_id: 1
+      chain_id: 1
+      token_address: "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      threshold_decimal: "500000000000"   # 500,000 USDT (6 decimals)
+    - customer_id: 1
+      chain_id: 1
+      token_address: "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599"
+      threshold_decimal: "1000000000"     # 10 WBTC (8 decimals)
+    - customer_id: 1
+      chain_id: 1
+      token_address: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      threshold_decimal: "200000000000000000000"  # 200 WETH (18 decimals)
+    - customer_id: 1
+      chain_id: 1
+      token_address: "0x6b175474e89094c44da98b954eedeac495271d0f"
+      threshold_decimal: "500000000000000000000000"  # 500,000 DAI (18 decimals)
+    - customer_id: 1
+      chain_id: 1
+      token_address: "0x853d955acef822db058eb8505911ed77f175b99e"
+      threshold_decimal: "500000000000000000000000"  # 500,000 FRAX (18 decimals)
+
+  oracle_update: []
+  governance: []
+  mint_burn: []
+  approval: []
+  bridge_transfers: []
+
+bridge_contracts: []

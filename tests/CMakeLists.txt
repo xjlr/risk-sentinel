@@ -25,6 +25,8 @@ add_executable(unit_tests
   test_bridge_transfer_rule.cpp
   test_oracle_normalize.cpp
   test_oracle_update_rule.cpp
+  test_file_alert_channel.cpp
+  test_backtest_config.cpp
 )
 
 target_link_libraries(unit_tests PRIVATE

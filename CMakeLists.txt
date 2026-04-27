@@ -52,6 +52,18 @@ CPMAddPackage(
   VERSION 0.18.1
 )
 
+# yaml-cpp (YAML parser, used by backtest config loader)
+CPMAddPackage(
+  NAME yaml-cpp
+  GITHUB_REPOSITORY jbeder/yaml-cpp
+  VERSION 0.8.0
+  GIT_TAG 0.8.0
+  OPTIONS
+    "YAML_CPP_BUILD_TESTS OFF"
+    "YAML_CPP_BUILD_TOOLS OFF"
+    "YAML_CPP_INSTALL OFF"
+)
+
 # libcurl
 find_package(CURL REQUIRED)
 
@@ -87,10 +99,14 @@ add_library(sentinel_core
   src/metrics/metrics.cpp
   src/app/app.cpp
   src/risk/webhook_alert_channel.cpp
+  src/risk/file_alert_channel.cpp
   src/security/crypto.cpp
   src/admin/encrypt_secret.cpp
   src/health/health_checks.cpp
   src/health/health_server.cpp
+  src/chains/ethereum/EthereumAdapter.cpp
+  src/backtest/backtest_config.cpp
+  src/backtest/backtest_app.cpp
 )
 
 
@@ -117,6 +133,7 @@ target_link_libraries(sentinel_core
   PRIVATE
     CURL::libcurl
     OpenSSL::Crypto
+    yaml-cpp::yaml-cpp
     ${PQXX_LIBRARIES}
     ${PQ_LIBRARIES}
 )

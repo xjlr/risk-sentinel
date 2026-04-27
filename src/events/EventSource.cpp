@@ -38,6 +38,13 @@ void EventSource::run(std::stop_token st) {
             next_block_);
 
   while (running_ && !st.stop_requested()) {
+    if (cfg_.backtest_end_block != 0 &&
+        next_block_ > cfg_.backtest_end_block) {
+      log_.info("Backtest range exhausted at block {}; exiting.",
+                next_block_ - 1);
+      break;
+    }
+
     if (heartbeat_) heartbeat_->record();
     bool work_done = false;
     try {
@@ -85,13 +92,23 @@ bool EventSource::poll_once() {
       throw std::runtime_error(std::string("latestBlock failed: ") + e.what());
     }
 
+    if (cfg_.backtest_end_block != 0) {
+      cached_chain_head_ =
+          std::min(cached_chain_head_, cfg_.backtest_end_block);
+    }
+
     // Cold start behavior: if there is no checkpoint, jump to head once.
     // (Optionally use a lookback here instead of exact head.)
     if (cold_start_) {
-      next_block_ = cached_chain_head_;
+      if (cfg_.backtest_end_block == 0) {
+        // Live mode: jump to head as before
+        next_block_ = cached_chain_head_;
+        log_.info("Cold start: jumping to chain head {}", next_block_);
+      } else {
+        // Backtest mode: keep next_block_ at cfg_.start_block
+        log_.info("Backtest cold start at block {}", next_block_);
+      }
       cold_start_ = false;
-
-      log_.info("Cold start: jumping to chain head {}", next_block_);
       return false; // now we're caught up; let the run() loop sleep (idle mode)
     }
   }

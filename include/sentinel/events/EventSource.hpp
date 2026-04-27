@@ -26,6 +26,11 @@ struct EventSourceConfig {
   std::chrono::milliseconds error_backoff{1000}; // after an error
   std::chrono::microseconds push_backoff{10};    // queue is full
   uint64_t min_block_range = 1;                  // retry halfening
+
+  // Backtest mode: when set, EventSource processes [start_block,
+  // backtest_end_block] inclusive and then exits run() cleanly.
+  // 0 (default) means live polling mode.
+  uint64_t backtest_end_block = 0;
 };
 
 class EventSource {
