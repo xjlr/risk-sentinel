@@ -312,18 +312,49 @@ perfect detection. That is the point. Honest partial coverage with clear
 gap analysis is more credible to a sophisticated security buyer than
 cherry-picked demonstrations.
 
+### Coverage limitations
+
+Risk Sentinel's rules cover specific attack categories, not all
+attack categories. Backtest evaluations against historical
+exploits surface real coverage gaps; documenting them honestly
+is part of the product's design.
+
+Currently uncovered attack categories include:
+
+- **Internal-vault oracle manipulation** (e.g. Cream Finance
+  Oct 2021, Harvest Finance Oct 2020). These exploits manipulate
+  a smart contract's internal price calculation rather than a
+  Chainlink price feed. `OracleUpdateRule` watches Chainlink
+  `AnswerUpdated` events and does not detect this attack class.
+  A future internal-oracle rule monitoring vault `pricePerShare`
+  changes is on the roadmap.
+
+- **Smart-contract logic flaws** (e.g. Euler Finance Mar 2023,
+  KyberSwap Nov 2023). These exploit specific function
+  vulnerabilities in protocol code. Risk Sentinel detects the
+  resulting fund movements but cannot detect the precursor
+  signal because there is no on-chain administrative action
+  before the exploit.
+
+- **Off-chain key compromise** (e.g. Ronin Bridge Mar 2022).
+  These compromise validator keys and submit valid-looking
+  transactions. Risk Sentinel detects the resulting transfers
+  (which often exceed any reasonable threshold) but the
+  compromise itself happens off-chain.
+
+Risk Sentinel's strongest detection is for attacks that begin
+with **on-chain administrative actions** — ownership transfers,
+role grants, contract upgrades, governance proposals. These
+leave detectable signals before fund movement, providing real
+lead time for response. See the Risk Rules table for which
+rules cover which signal types.
+
 ### Running a backtest
 
 ```bash
 export ETHEREUM_RPC_URL=https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY
 ./build/dev/sentinel backtest backtest_configs/nomad_2022.yaml
 ```
-
-> **Note**: `backtest_configs/cream_2021.yaml` is provided as a template
-> and contains a `0xTODO_VERIFY_yUSD_AGGREGATOR_ADDRESS` placeholder for
-> the Chainlink aggregator. It must be edited with a verified address
-> (researched against Etherscan for the relevant block range) before
-> use. The Nomad config is runnable as-is.
 
 Output is written to the path specified in the YAML's `output_path`
 field (default: `./backtest_reports/<name>.jsonl`).
@@ -335,8 +366,7 @@ Configs are YAML files describing:
 - Customer(s) and their per-rule configurations
 - Bridge contract registry (for BridgeTransferRule, when used)
 
-See `backtest_configs/cream_2021.yaml` and `backtest_configs/nomad_2022.yaml`
-for complete examples.
+See `backtest_configs/nomad_2022.yaml` for a complete example.
 
 All six rule types (large_transfer, governance, mint_burn, approval,
 bridge_transfers, oracle_update) are loadable. Only sections present
