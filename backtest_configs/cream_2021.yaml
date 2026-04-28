@@ -17,11 +17,16 @@
 # before running this backtest. Replace the TODO address with the verified
 # yUSD/USD aggregator that was active in the [start_block, end_block] range.
 
+# max_block_range: 10 is set for Alchemy free tier compatibility.
+# If you upgrade to a paid plan (Alchemy Growth, Infura paid, etc.),
+# raise this to 100-1000 for faster backtests on longer ranges. See
+# README "Provider rate limits" for the per-provider caps.
+
 chain: ethereum
 start_block: 13499500
 end_block: 13499600
 output_path: ./backtest_reports/cream_2021.jsonl
-max_block_range: 100
+max_block_range: 10
 
 customers:
   - id: 1

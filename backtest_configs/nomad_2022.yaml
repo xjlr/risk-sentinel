@@ -31,11 +31,16 @@
 #   here, but production use would need either a from_address filter or
 #   a bridge-aware variant.
 
+# max_block_range: 10 is set for Alchemy free tier compatibility.
+# If you upgrade to a paid plan (Alchemy Growth, Infura paid, etc.),
+# raise this to 100-1000 for faster backtests on longer ranges. See
+# README "Provider rate limits" for the per-provider caps.
+
 chain: ethereum
 start_block: 15259101
 end_block: 15259198
 output_path: ./backtest_reports/nomad_2022.jsonl
-max_block_range: 50
+max_block_range: 10
 
 customers:
   - id: 1

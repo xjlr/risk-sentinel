@@ -367,6 +367,38 @@ above ~$2,000/month of provider spend. For your first paying customer,
 use a managed provider — operational simplicity outweighs the cost
 savings until you have several customers.
 
+### Provider rate limits
+
+Different RPC providers cap the maximum block range per `eth_getLogs`
+request. Set `max_block_range` in your YAML accordingly to avoid
+HTTP 400 errors mid-backtest.
+
+| Provider                   | Max blocks per getLogs | Recommended `max_block_range` |
+|----------------------------|------------------------|-------------------------------|
+| Alchemy Free               | 10                     | 10                            |
+| Alchemy Growth ($49/mo)    | 2000                   | 500-1000                      |
+| Infura Free                | 10000                  | 1000                          |
+| QuickNode (paid)           | varies by plan         | Check provider dashboard      |
+| Self-hosted Erigon/Geth    | Unlimited              | 1000-10000                    |
+
+The shipped backtest configs use `max_block_range: 10` so they work
+out of the box with Alchemy's free tier. If you upgrade, raise the
+value for faster backtests on longer ranges. The 97-block Nomad
+backtest takes about 10 RPC calls at range 10, or 1-2 calls at
+range 50+ — for short backtests the difference is negligible.
+
+If you exceed the provider's limit, EventSource logs a warning like:
+
+    [warning] [source] getLogs error: JSON-RPC HTTP error: 400 ...
+
+and retries, which means the warning repeats indefinitely. Lower the
+range and re-run.
+
+> **Note**: EventSource currently retries indefinitely on persistent
+> HTTP 400 errors. A future improvement will distinguish persistent
+> configuration errors from transient ones and exit cleanly with a
+> clear message.
+
 ### Output format
 
 One JSON object per line (JSONL):
